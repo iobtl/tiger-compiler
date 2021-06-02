@@ -24,7 +24,7 @@ fun max a b =
 
 fun maxargs stmt =
 	let
-		fun read_exp e =
+        fun read_exp e =
 			case e of
 				OpExp(e1, _, e2) => max (read_exp e1) (read_exp e2)
 			  | EseqExp(s, e) => max (maxargs s) (read_exp e)
