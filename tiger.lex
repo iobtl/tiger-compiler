@@ -1,5 +1,7 @@
 type pos = int
-type lexresult = Tokens.token
+type svalue = Tokens.svalue
+type lexresult = (svalue, pos) Tokens.token
+type ('a, 'b) token = ('a, 'b) Tokens.token
 
 val lineNum = ErrorMsg.lineNum
 val linePos = ErrorMsg.linePos
@@ -9,6 +11,7 @@ fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
 fun intToString s = let val SOME x = Int.fromString s in x end
 
 %% 
+%header (functor TigerLexFun(structure Tokens: Tiger_TOKENS));
 %%
 
 <INITIAL>if    	  => (Tokens.IF(yypos, yypos+2));
