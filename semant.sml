@@ -11,7 +11,11 @@ struct
 
   fun actual_ty ty =
     case ty of
-      _ => ty
+      Ty.NAME(sym, ref(NONE)) => Ty.NIL
+    | Ty.NAME(sym, ref(SOME(t))) => actual_ty t
+    | Ty.ARRAY(t, u) => Ty.ARRAY(actual_ty t, u)
+    | Ty.RECORD(fieldls, u) => Ty.RECORD(List.map (fn (s, t) => (s, actual_ty t)) fieldls, u)
+    | _ => ty
 
   fun checkInt ({exp, ty}, pos) =
     case ty of
@@ -247,12 +251,19 @@ struct
                 {tenv=tenv, venv=Symbol.enter(venv, name, E.VarEntry({ty=initty}))}
               end
 
-    | transDec(venv, tenv, A.TypeDec(decs)) =
+    | transDec(venv, tenv, A.TypeDec({name, ty, pos}::decs)) =
               let
-                fun add_type {name, ty, pos} tenv' = Symbol.enter(tenv', name, transTy(tenv', ty))
+                val tenv' = Symbol.enter(tenv, name, Ty.NAME(name, ref NONE))
+                val return_ty = transTy(tenv', ty)
               in
-                {venv=venv,
-                 tenv=(List.foldl (fn (dec, tenv') => add_type dec tenv') tenv decs)}
+                (case Symbol.look(tenv', name) of
+                  NONE => error pos "type declaration error"
+                | SOME(t) => (case t of
+                                Ty.NAME(n, r) => r := SOME(return_ty)
+                              | _ => error pos "type declaration error");
+                case decs of
+                  [] => {venv=venv, tenv=tenv'}
+                | _ => transDec(venv, tenv', A.TypeDec(decs)))
               end
 
     | transDec(venv, tenv, A.FunctionDec({name, params, body, pos, result}::decs)) =
@@ -289,10 +300,10 @@ struct
     | transTy(tenv, A.RecordTy(fieldls)) =
               let
                 fun get_type {name, escape, typ, pos} =
-                case Symbol.look(tenv, typ) of 
-                  NONE => (error pos ("invalid type used in type declaration: " ^ (Symbol.name typ));
-                            Ty.INT)
-                | SOME(ty) => ty
+                  case Symbol.look(tenv, typ) of 
+                    NONE => (error pos ("invalid type used in type declaration: " ^ (Symbol.name typ));
+                              Ty.INT)
+                  | SOME(ty) => ty
 
                 val fields = ListPair.zip ((List.map (fn x => #name x) fieldls), (List.map get_type fieldls))
               in
