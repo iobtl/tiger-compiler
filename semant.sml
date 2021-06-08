@@ -172,7 +172,7 @@ struct
                   let
                     val {venv=venv', tenv=tenv'} = List.foldl 
                                          (fn (x, {venv, tenv}) => transDec (venv, tenv, x)) 
-                                         {venv=venv, tenv=venv} decs
+                                         {venv=venv, tenv=tenv} decs
                   val newTrexp = transExp(venv', tenv')
                   in
                     newTrexp body
@@ -182,11 +182,14 @@ struct
                     val array_ty = case Symbol.look(tenv, typ) of
                       NONE => (error pos ("undefined array type " ^ (Symbol.name typ)); Ty.INT)
                     | SOME(ty) => ty
+
+                    val {exp=_, ty=sizety} = trexp size
+                    val {exp=_, ty=initty} = trexp init
                   in
                     case array_ty of
                       Ty.ARRAY(aty, u) =>
-                        (checkType(Ty.INT, trexp size, "invalid array size type", pos);
-                        checkType(aty, trexp init, "mismatching array initialization type", pos);
+                        (checkType(Ty.INT, sizety, "invalid array size type", pos);
+                        checkType(aty, initty, "mismatching array initialization type", pos);
                         {exp=(), ty=Ty.ARRAY(aty, u)})
                     | _ => (error pos ("undefined array type " ^ (Symbol.name typ)); {exp=(), ty=Ty.INT})
                   end
