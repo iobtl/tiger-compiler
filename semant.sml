@@ -29,12 +29,12 @@ struct
 
   fun transProg abExp =
     let
-      val x = 5
+      val translator = transExp(E.base_venv, E.base_tenv)
     in
-      print "hello"
+      (translator abExp; ())
     end
 
-  fun transExp(venv, tenv) =
+  and transExp(venv, tenv) =
     (* Arithmetic operations *)
     let fun trexp (A.OpExp({left, oper=A.PlusOp, right, pos})) =
                   (checkInt(trexp left, pos);
@@ -266,29 +266,48 @@ struct
                 | _ => transDec(venv, tenv', A.TypeDec(decs)))
               end
 
-    | transDec(venv, tenv, A.FunctionDec({name, params, body, pos, result}::decs)) =
+    | transDec(venv, tenv, A.FunctionDec(decs)) =
               let
-                fun transparam {name, escape, typ, pos} =
+                fun get_param_ty {name, typ, pos, escape} =
                   case Symbol.look(tenv, typ) of
-                    NONE => ((error pos "invalid parameter type"); {name=name, ty=Ty.INT})
-                  | SOME(t) => {name=name, ty=t}
-                fun enterparam ({name, ty}, venv) =
-                  Symbol.enter(venv, name, E.VarEntry({ty=ty}))
+                    NONE => ((error pos "invalid function parameter type"); Ty.INT)
+                  | SOME(t) => t
 
-                val result_ty = case result of
-                  NONE => Ty.UNIT
-                | SOME(rt, pos) => (case Symbol.look(tenv, rt) of
-                                    NONE => ((error pos "invalid result type"); Ty.INT)
-                                  | SOME(t) => t)
-                val params' = List.map transparam params
-                val venv' = Symbol.enter(venv, name, E.FunEntry({formals=(List.map #ty params'),
-                                                                 result=result_ty}))
-                val venv'' = List.foldl enterparam venv' params'
+                fun transheaders ({name, params, result, body, pos}, env) =
+                  let
+                    val return_ty = case result of
+                      NONE => Ty.UNIT
+                    | SOME(s, p) => (case Symbol.look(tenv, s) of
+                                      NONE => (error pos ("invalid function result type " ^ (Symbol.name s));
+                                              Ty.INT)
+                                    | SOME(t) => t)
+
+                    val param_tys = List.map get_param_ty params
+                  in
+                    Symbol.enter(env, name, E.FunEntry({formals=param_tys, result=return_ty}))
+                  end
+
+                fun transbody ({name, params, result, body, pos} : A.fundec, {tenv, venv}) =
+                  let
+                    val venv' = List.foldl transheaders venv decs
+                    val SOME(E.FunEntry({formals, result})) = Symbol.look(venv, name)
+
+                    fun transparam ({name, escape, typ, pos}) =
+                      case Symbol.look(tenv, typ) of
+                        NONE => (error pos ("invalid function parameter type " ^ (Symbol.name typ)); {name=name, ty=Ty.INT})
+                      | SOME(t) => {name=name, ty=t}
+
+                    (* evaluate body expression with processed parameter list and
+                     previously (header-) augmented environment *)
+                    val params' = List.map transparam params
+                    val venv'' = List.foldl (fn ({name, ty}, env) => Symbol.enter(env, name, E.VarEntry({ty=ty})))
+                                venv params'
+                    val {exp, ty} = transExp(venv'', tenv) body
+                  in
+                    {venv=venv', tenv=tenv}
+                  end
               in
-                (transExp(venv'', tenv) body; 
-                case decs of
-                  [] => {venv=venv', tenv=tenv}
-                | _ => transDec(venv', tenv, A.FunctionDec(decs)))
+                List.foldl transbody {venv=venv, tenv=tenv} decs
               end
 
   and transTy(tenv, A.NameTy(sym, pos)) =
