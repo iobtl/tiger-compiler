@@ -188,13 +188,36 @@ struct
                         (checkType(Ty.INT, trexp size, "invalid array size type", pos);
                         checkType(aty, trexp init, "mismatching array initialization type", pos);
                         {exp=(), ty=Ty.ARRAY(aty, u)})
-                      | _ => (error pos ("undefined array type " ^ (Symbol.name typ)); {exp=(), ty=Ty.INT})
+                    | _ => (error pos ("undefined array type " ^ (Symbol.name typ)); {exp=(), ty=Ty.INT})
                   end
         and trvar (A.SimpleVar(sym, pos)) =
-                  case Symbol.look(venv, sym) of
+                  (case Symbol.look(venv, sym) of
                       SOME(E.VarEntry({ty})) => {exp=(), ty=actual_ty ty}
                     | NONE => (error pos ("undefined variable " ^ (Symbol.name sym));
-                              {exp=(), ty=Ty.INT})
+                              {exp=(), ty=Ty.INT}))
+          | trvar (A.FieldVar(var, sym, pos)) =
+                  let
+                    val {exp=_, ty=vty} = trvar var
+                  in
+                    case vty of
+                      Ty.RECORD(fieldls, u) =>
+                        if List.exists (fn (x, _) => x = sym) fieldls
+                        then {exp=(), ty=vty}
+                        else (error pos ("record field " ^ (Symbol.name sym) ^ " not found");
+                             {exp=(), ty=Ty.INT})
+                    | _ => (error pos "variable not of record type"; {exp=(), ty=Ty.INT})
+                  end
+          | trvar (A.SubscriptVar(var, subexp, pos)) =
+                  let
+                    val {exp=_, ty=subty} = trexp subexp
+                    val {exp=_, ty=vty} = trvar var
+                  in
+                    case vty of
+                      Ty.ARRAY(ty, u) =>
+                        (checkType(Ty.INT, subty, "subscript expression not of type int", pos);
+                        {exp=(), ty=ty})
+                    | _ => (error pos "variable not of array type"; {exp=(), ty=Ty.INT})
+                  end
     in
       trexp
     end
