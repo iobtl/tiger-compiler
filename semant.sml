@@ -86,8 +86,9 @@ struct
                       [] => []
                     | xs => List.map #ty xs
                     val {formals=formtyps, result=result} = case Symbol.look(venv, func) of
-                      NONE => (error pos "function not found in current environment"; {formals=[], result=Ty.INT})
-                    | SOME(E.FunEntry({formals, result})) => {formals=formals, result=result}
+                     SOME(E.FunEntry({formals, result})) => {formals=formals, result=result}
+                    | NONE => (error pos "function not found in current environment"; {formals=[], result=Ty.INT})
+                    | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; {formals=[], result=Ty.INT})
                   in
                     case ListPair.allEq (fn (a, b) => a = b) (argtyps, formtyps) of
                       false => (error pos ("invalid argument type passed to function " ^ (Symbol.name func));
@@ -196,6 +197,8 @@ struct
         and trvar (A.SimpleVar(sym, pos)) =
                   (case Symbol.look(venv, sym) of
                       SOME(E.VarEntry({ty})) => {exp=(), ty=actual_ty ty}
+                    | SOME(E.FunEntry(_)) => (error pos ("expected variable but got function " ^
+                                             (Symbol.name sym)); {exp=(), ty=Ty.INT})
                     | NONE => (error pos ("undefined variable " ^ (Symbol.name sym));
                               {exp=(), ty=Ty.INT}))
           | trvar (A.FieldVar(var, sym, pos)) =
@@ -271,7 +274,10 @@ struct
                                                                  result=result_ty}))
                 val venv'' = List.foldl enterparam venv' params'
               in
-                transExp(venv'', tenv) body; {venv=venv', tenv=tenv}
+                (transExp(venv'', tenv) body; 
+                case decs of
+                  [] => {venv=venv', tenv=tenv}
+                | _ => transDec(venv', tenv, A.FunctionDec(decs)))
               end
 
   and transTy(tenv, A.NameTy(sym, pos)) =
