@@ -14,7 +14,7 @@ struct
       Ty.NAME(sym, ref(NONE)) => Ty.NIL
     | Ty.NAME(sym, ref(SOME(t))) => actual_ty t
     | Ty.ARRAY(t, u) => Ty.ARRAY(actual_ty t, u)
-    | Ty.RECORD(fieldls, u) => Ty.RECORD(List.map (fn (s, t) => (s, actual_ty t)) fieldls, u)
+    (*| Ty.RECORD(fieldls, u) => Ty.RECORD(List.map (fn (s, t) => (s, actual_ty t)) fieldls, u)*)
     | _ => ty
 
   fun checkInt ({exp, ty}, pos) =
@@ -23,9 +23,28 @@ struct
     | _ => error pos "integer required"
 
   fun checkType (ty, absty, msg, pos) =
-    if ty <> absty
-    then ((error pos msg); Ty.INT)
-    else absty
+    let
+      val t1 = actual_ty ty
+      val t2 = actual_ty absty
+    in
+      if t1 <> t2
+      then 
+        case (t1, t2) of
+          (Ty.RECORD(_, _), Ty.NIL) => ()
+        | (Ty.NIL, Ty.RECORD(_, _)) => ()
+        | _ => error pos msg
+      else ()
+  end
+
+  fun printType ty =
+    print (case ty of
+      Ty.RECORD(_, _) => "record"
+    | Ty.NIL => "nil"
+    | Ty.INT => "int"
+    | Ty.STRING => "string"
+    | Ty.ARRAY(_, _) => "array" 
+    | Ty.NAME(_, _) => "name"
+    | Ty.UNIT => "unit")
 
   fun transProg abExp =
     let
@@ -97,7 +116,7 @@ struct
                     case ListPair.allEq (fn (a, b) => a = b) (argtyps, formtyps) of
                       false => (error pos ("invalid argument type passed to function " ^ (Symbol.name func));
                                {exp=(), ty=Ty.INT})
-                    | true => {exp=(), ty=result}
+                    | true => {exp=(), ty=actual_ty result}
                   end
           | trexp (A.RecordExp({fields, typ, pos})) =
                   let
@@ -106,14 +125,14 @@ struct
                       then error pos (Int.toString(List.length recls) ^ " defined fields, but only " 
                            ^ Int.toString(List.length fieldls) ^ " fields provided in expression")
                       else
-                        (List.map (fn ((_, a), b) => checkType(a, b, "mismatched record field types", pos))
-                        (ListPair.zip (recls, fieldls)); ())
+                        List.app (fn ((_, a), b) => checkType(a, b, "mismatched record field types", pos))
+                        (ListPair.zip (recls, fieldls))
 
                     val record_ty = case Symbol.look (tenv, typ) of
                       NONE => (error pos ("undefined record type " ^ (Symbol.name typ)); Ty.INT)
-                    | SOME(ty) => ty
+                    | SOME(ty) => (print ("processed record " ^ (Symbol.name typ) ^ "\n"); ty)
                   in
-                    case record_ty of
+                    case actual_ty record_ty of
                       Ty.RECORD(rectyps, u) =>
                         let
                           val fieldls = List.map (fn (_, exp, _) => trexp exp) fields
@@ -178,7 +197,7 @@ struct
                     val {venv=venv', tenv=tenv'} = List.foldl 
                                          (fn (x, {venv, tenv}) => transDec (venv, tenv, x)) 
                                          {venv=venv, tenv=tenv} decs
-                  val newTrexp = transExp(venv', tenv')
+                    val newTrexp = transExp(venv', tenv')
                   in
                     newTrexp body
                   end
@@ -191,7 +210,7 @@ struct
                     val {exp=_, ty=sizety} = trexp size
                     val {exp=_, ty=initty} = trexp init
                   in
-                    case array_ty of
+                    case actual_ty array_ty of
                       Ty.ARRAY(aty, u) =>
                         (checkType(Ty.INT, sizety, "invalid array size type", pos);
                         checkType(aty, initty, "mismatching array initialization type", pos);
@@ -209,10 +228,10 @@ struct
                   let
                     val {exp=_, ty=vty} = trvar var
                   in
-                    case vty of
+                    case actual_ty vty of
                       Ty.RECORD(fieldls, u) =>
                         if List.exists (fn (x, _) => x = sym) fieldls
-                        then {exp=(), ty=vty}
+                        then {exp=(), ty=actual_ty vty}
                         else (error pos ("record field " ^ (Symbol.name sym) ^ " not found");
                              {exp=(), ty=Ty.INT})
                     | _ => (error pos "variable not of record type"; {exp=(), ty=Ty.INT})
@@ -222,10 +241,10 @@ struct
                     val {exp=_, ty=subty} = trexp subexp
                     val {exp=_, ty=vty} = trvar var
                   in
-                    case vty of
+                    case actual_ty vty of
                       Ty.ARRAY(ty, u) =>
                         (checkType(Ty.INT, subty, "subscript expression not of type int", pos);
-                        {exp=(), ty=ty})
+                        {exp=(), ty=actual_ty ty})
                     | _ => (error pos "variable not of array type"; {exp=(), ty=Ty.INT})
                   end
     in
@@ -244,26 +263,27 @@ struct
                 val {exp=initexp, ty=initty} = transExp(venv, tenv) init
                 val {exp=typexp, ty=typty} =
                   case Symbol.look(tenv, sym) of
-                    NONE => {exp=(), ty=Ty.NIL}
-                  | SOME(ty) => {exp=(), ty=ty}
+                    NONE => (error pos ("variable initialization type " ^ 
+                                        (Symbol.name sym) ^ " not found");
+                                        {exp=(), ty=Ty.NIL})
+                  | SOME(ty) => {exp=(), ty=actual_ty ty}
               in
                 checkType(initty, typty, "mismatching declaration type", pos);
-                {tenv=tenv, venv=Symbol.enter(venv, name, E.VarEntry({ty=initty}))}
+                {tenv=tenv, venv=Symbol.enter(venv, name, E.VarEntry({ty=typty}))}
               end
 
-    | transDec(venv, tenv, A.TypeDec({name, ty, pos}::decs)) =
+    | transDec(venv, tenv, A.TypeDec(decs)) =
               let
-                val tenv' = Symbol.enter(tenv, name, Ty.NAME(name, ref NONE))
-                val return_ty = transTy(tenv', ty)
+                val tenv' = List.foldl (fn ({name, ...}, env) =>
+                                       Symbol.enter(env, name, Ty.NAME(name, ref NONE)))
+                                       tenv decs
+                val tenv'' = List.foldl (fn ({name, ty, ...}, env) =>
+                                        case Symbol.look(env, name) of
+                                          SOME(Ty.NAME(n, r)) =>
+                                            (r := SOME(transTy(env, ty)); env))
+                                        tenv' decs
               in
-                (case Symbol.look(tenv', name) of
-                  NONE => error pos "type declaration error"
-                | SOME(t) => (case t of
-                                Ty.NAME(n, r) => r := SOME(return_ty)
-                              | _ => error pos "type declaration error");
-                case decs of
-                  [] => {venv=venv, tenv=tenv'}
-                | _ => transDec(venv, tenv', A.TypeDec(decs)))
+                {venv=venv, tenv=tenv''}
               end
 
     | transDec(venv, tenv, A.FunctionDec(decs)) =
@@ -290,7 +310,7 @@ struct
                 fun transbody ({name, params, result, body, pos} : A.fundec, {tenv, venv}) =
                   let
                     val venv' = List.foldl transheaders venv decs
-                    val SOME(E.FunEntry({formals, result})) = Symbol.look(venv, name)
+                    val SOME(E.FunEntry({formals, result})) = Symbol.look(venv', name)
 
                     fun transparam ({name, escape, typ, pos}) =
                       case Symbol.look(tenv, typ) of
@@ -301,7 +321,7 @@ struct
                      previously (header-) augmented environment *)
                     val params' = List.map transparam params
                     val venv'' = List.foldl (fn ({name, ty}, env) => Symbol.enter(env, name, E.VarEntry({ty=ty})))
-                                venv params'
+                                venv' params'
                     val {exp, ty} = transExp(venv'', tenv) body
                   in
                     {venv=venv', tenv=tenv}
@@ -333,6 +353,6 @@ struct
               (case Symbol.look(tenv, sym) of
                 NONE => (error pos ("invalid type used in type declaration: " ^ (Symbol.name sym));
                           Ty.INT)
-              | SOME(ty) => ty)
+              | SOME(ty) => Ty.ARRAY(ty, ref()))
     
 end

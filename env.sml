@@ -1,9 +1,10 @@
-structure S = Symbol
-structure Ty = Types
-
-structure Env :> ENV =
+structure Env : ENV =
 struct
-  type ty = Ty.ty
+  structure S = Symbol
+  structure Ty = Types
+
+  type ty = Types.ty
+
   datatype enventry = VarEntry of {ty: ty}
                     | FunEntry of {formals: ty list, result : ty}
 

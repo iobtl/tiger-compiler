@@ -34,7 +34,7 @@ fun intToString s = let val SOME x = Int.fromString s in x end
 <INITIAL>var  	  => (Tokens.VAR(yypos,yypos+3));
 
 \"[^\"]*\"     		 => (Tokens.STRING(yytext, yypos, yypos + size yytext));
-[a-zA-Z][a-zA-Z0-9]* => (Tokens.ID(yytext, yypos, yypos + size yytext));
+[a-zA-Z][a-zA-Z0-9_]* => (Tokens.ID(yytext, yypos, yypos + size yytext));
 [0-9]+	       		 => (Tokens.INT(intToString yytext, yypos, yypos + size yytext));
 \/\*.*\*\/     		 => (continue());
 [\ \t\b\f\r]+  		 => (continue());

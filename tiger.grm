@@ -24,11 +24,13 @@ type symbol = Symbol.symbol
         | declaration_list of A.dec list
         | declaration of A.dec
         | ty_declaration of {name: symbol, ty: A.ty, pos: pos}
+        | ty_declaration_ls of {name: symbol, ty: A.ty, pos: pos} list
         | ty of A.ty
         | ty_fields of A.field list
         | ty_field of A.field
         | var_declaration of A.dec
         | func_declaration of A.fundec
+        | func_declaration_ls of A.fundec list
 
 
 %pos int
@@ -68,9 +70,13 @@ declaration_list :               ([])
   | declaration declaration_list (declaration::declaration_list)
 
 declaration : 
-    ty_declaration   (A.TypeDec([ty_declaration]))
-  | var_declaration  (var_declaration)
-  | func_declaration (A.FunctionDec([func_declaration]))
+    ty_declaration_ls   (A.TypeDec(ty_declaration_ls))
+  | var_declaration     (var_declaration)
+  | func_declaration_ls (A.FunctionDec(func_declaration_ls))
+
+ty_declaration_ls :
+    ty_declaration                    ([ty_declaration])
+  | ty_declaration ty_declaration_ls  (ty_declaration::ty_declaration_ls)
 
 ty_declaration : TYPE ID EQ ty ({name=(Symbol.symbol ID), ty=ty, pos=TYPEleft})
 
@@ -88,6 +94,10 @@ ty_fields :                  ([])
 var_declaration :
     VAR ID ASSIGN exp          (A.VarDec({name=(Symbol.symbol ID), escape=ref true, typ=NONE, init=exp, pos=IDleft}))
   | VAR ID COLON ID ASSIGN exp (A.VarDec({name=(Symbol.symbol ID1), escape=ref true, typ=SOME(Symbol.symbol ID2, ID2left), init=exp, pos=ID1left}))
+
+func_declaration_ls :
+    func_declaration                     ([func_declaration])
+  | func_declaration func_declaration_ls (func_declaration::func_declaration_ls)
 
 func_declaration :
     FUNCTION ID LPAREN ty_fields RPAREN EQ exp          ({name=(Symbol.symbol ID), params=ty_fields, result=NONE, body=exp, pos=FUNCTIONleft})
