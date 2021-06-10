@@ -49,7 +49,10 @@ struct
 
   fun transProg abExp =
     let
-      val translator = transExp(E.base_venv, E.base_tenv, T.outermost)
+      val outer_level = T.newLevel {parent=T.outermost, 
+                                    name=Temp.namedlabel "main", 
+                                    formals=[]}
+      val translator = transExp(E.base_venv, E.base_tenv, outer_level)
     in
       (translator abExp; ())
     end
@@ -149,7 +152,7 @@ struct
                     val res = List.map trexp (List.map (fn (exp, _) => exp) expls)
                   in
                     case res of
-                      [] => {exp=(), ty=Ty.NIL}
+                      [] => {exp=(), ty=Ty.UNIT}
                     | _ => List.last res
                   end
           | trexp (A.AssignExp({var, exp, pos})) =
