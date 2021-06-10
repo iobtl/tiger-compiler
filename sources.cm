@@ -1,14 +1,19 @@
 Group is 
 
 absyn.sml
-table.sig
 table.sml
+table.sig
 symbol.sml
-env.sig
 env.sml
-semant.sig
+env.sig
 semant.sml
+semant.sig
 translate.sml
+translate.sig
+mipsframe.sml
+frame.sig
+temp.sml
+temp.sig
 types.sml
 errormsg.sml
 main.sml

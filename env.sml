@@ -5,8 +5,10 @@ struct
 
   type ty = Types.ty
 
-  datatype enventry = VarEntry of {ty: ty}
-                    | FunEntry of {formals: ty list, result : ty}
+  datatype enventry = VarEntry of {access: Translate.access, ty: ty}
+                    | FunEntry of {level: Translate.level,
+                                   label: Temp.label,
+                                   formals: ty list, result : ty}
 
   val std_fun = [
     ("print", [Ty.STRING], Ty.UNIT),
@@ -27,7 +29,9 @@ struct
   val base_venv =
     let
       fun create_symbol (s, _, _) = S.symbol s
-      fun create_fun_entry (_, formals, result) = FunEntry({formals=formals, result=result})
+      fun create_fun_entry (sym, formals, result) = 
+        FunEntry({level=Translate.outermost, label=Temp.namedlabel sym,
+                  formals=formals, result=result})
 
       fun init_std_fun fun_ls =
         List.foldl 
