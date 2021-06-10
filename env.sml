@@ -8,7 +8,8 @@ struct
   datatype enventry = VarEntry of {access: Translate.access, ty: ty}
                     | FunEntry of {level: Translate.level,
                                    label: Temp.label,
-                                   formals: ty list, result : ty}
+                                   formals: ty list, 
+                                   result : ty}
 
   val std_fun = [
     ("print", [Ty.STRING], Ty.UNIT),

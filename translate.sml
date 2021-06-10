@@ -18,5 +18,4 @@ struct
   fun allocLocal (level : level) esc =
     case level of
       Level({parent, frame}) => (level, F.allocLocal frame esc)
-    
 end

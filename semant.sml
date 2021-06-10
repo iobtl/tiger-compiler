@@ -3,6 +3,7 @@ struct
   structure A = Absyn
   structure E = Env
   structure Ty = Types
+  structure T = Translate
 
   val error = ErrorMsg.error
 
@@ -48,12 +49,12 @@ struct
 
   fun transProg abExp =
     let
-      val translator = transExp(E.base_venv, E.base_tenv)
+      val translator = transExp(E.base_venv, E.base_tenv, T.outermost)
     in
       (translator abExp; ())
     end
 
-  and transExp(venv, tenv) =
+  and transExp(venv, tenv, level) =
     (* Arithmetic operations *)
     let fun trexp (A.OpExp({left, oper=A.PlusOp, right, pos})) =
                   (checkInt(trexp left, pos);
@@ -108,10 +109,11 @@ struct
                     val argtyps = case List.map trexp args of
                       [] => []
                     | xs => List.map #ty xs
-                    val {formals=formtyps, result=result} = case Symbol.look(venv, func) of
-                     SOME(E.FunEntry({formals, result})) => {formals=formals, result=result}
-                    | NONE => (error pos "function not found in current environment"; {formals=[], result=Ty.INT})
-                    | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; {formals=[], result=Ty.INT})
+                    val {formals=formtyps, result=result} = 
+                      case Symbol.look(venv, func) of
+                        SOME(E.FunEntry({level, label, formals, result})) => {formals=formals, result=result}
+                      | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; {formals=[], result=Ty.INT})
+                      | NONE => (error pos "function not found in current environment"; {formals=[], result=Ty.INT})
                   in
                     case ListPair.allEq (fn (a, b) => a = b) (argtyps, formtyps) of
                       false => (error pos ("invalid argument type passed to function " ^ (Symbol.name func));
@@ -195,9 +197,9 @@ struct
           | trexp (A.LetExp({decs, body, pos})) =
                   let
                     val {venv=venv', tenv=tenv'} = List.foldl 
-                                         (fn (x, {venv, tenv}) => transDec (venv, tenv, x)) 
+                                         (fn (x, {venv, tenv}) => transDec (venv, tenv, level, x)) 
                                          {venv=venv, tenv=tenv} decs
-                    val newTrexp = transExp(venv', tenv')
+                    val newTrexp = transExp(venv', tenv', level)
                   in
                     newTrexp body
                   end
@@ -219,7 +221,7 @@ struct
                   end
         and trvar (A.SimpleVar(sym, pos)) =
                   (case Symbol.look(venv, sym) of
-                      SOME(E.VarEntry({ty})) => {exp=(), ty=actual_ty ty}
+                      SOME(E.VarEntry({access, ty})) => {exp=(), ty=actual_ty ty}
                     | SOME(E.FunEntry(_)) => (error pos ("expected variable but got function " ^
                                              (Symbol.name sym)); {exp=(), ty=Ty.INT})
                     | NONE => (error pos ("undefined variable " ^ (Symbol.name sym));
@@ -251,28 +253,32 @@ struct
       trexp
     end
 
-  and transDec(venv, tenv, A.VarDec({name, escape, typ=NONE, init, pos})) =
+  and transDec(venv, tenv, level, A.VarDec({name, escape, typ=NONE, init, pos})) =
               let
-                val {exp, ty} = transExp(venv, tenv) init
+                val {exp, ty} = transExp(venv, tenv, level) init
+                val access = T.allocLocal level (!escape)
               in
-                {tenv=tenv, venv=Symbol.enter(venv, name, E.VarEntry({ty=ty}))}
+                {tenv=tenv, 
+                 venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=ty}))}
               end
 
-    | transDec(venv, tenv, A.VarDec({name, escape, typ=SOME(sym, sympos), init, pos})) =
+    | transDec(venv, tenv, level, A.VarDec({name, escape, typ=SOME(sym, sympos), init, pos})) =
               let
-                val {exp=initexp, ty=initty} = transExp(venv, tenv) init
+                val {exp=initexp, ty=initty} = transExp(venv, tenv, level) init
                 val {exp=typexp, ty=typty} =
                   case Symbol.look(tenv, sym) of
                     NONE => (error pos ("variable initialization type " ^ 
                                         (Symbol.name sym) ^ " not found");
                                         {exp=(), ty=Ty.NIL})
                   | SOME(ty) => {exp=(), ty=actual_ty ty}
+                val access = T.allocLocal level (!escape)
               in
                 checkType(initty, typty, "mismatching declaration type", pos);
-                {tenv=tenv, venv=Symbol.enter(venv, name, E.VarEntry({ty=typty}))}
+                {tenv=tenv, 
+                 venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=typty}))}
               end
 
-    | transDec(venv, tenv, A.TypeDec(decs)) =
+    | transDec(venv, tenv, level, A.TypeDec(decs)) =
               let
                 val tenv' = List.foldl (fn ({name, ...}, env) =>
                                        Symbol.enter(env, name, Ty.NAME(name, ref NONE)))
@@ -286,15 +292,20 @@ struct
                 {venv=venv, tenv=tenv''}
               end
 
-    | transDec(venv, tenv, A.FunctionDec(decs)) =
+    | transDec(venv, tenv, level, A.FunctionDec(decs)) =
               let
                 fun get_param_ty {name, typ, pos, escape} =
                   case Symbol.look(tenv, typ) of
                     NONE => ((error pos "invalid function parameter type"); Ty.INT)
                   | SOME(t) => t
 
-                fun transheaders ({name, params, result, body, pos}, env) =
+                (* insert function skeleton headers first to allow for mutually 
+                recursive declarations *)
+                fun transheaders ({name, params, result, body, pos} : A.fundec, env) =
                   let
+                    fun get_escape (params : A.field list)  =
+                      List.map (fn x => (!x)) (List.map #escape params)
+
                     val return_ty = case result of
                       NONE => Ty.UNIT
                     | SOME(s, p) => (case Symbol.look(tenv, s) of
@@ -303,26 +314,36 @@ struct
                                     | SOME(t) => t)
 
                     val param_tys = List.map get_param_ty params
+                    val label = Temp.newlabel()
+                    val new_level = T.newLevel {parent=level, 
+                                                name=label, 
+                                                formals=get_escape params}
                   in
-                    Symbol.enter(env, name, E.FunEntry({formals=param_tys, result=return_ty}))
+                    Symbol.enter(env, name, E.FunEntry({level=new_level, 
+                                                        label=label,
+                                                        formals=param_tys, 
+                                                        result=return_ty}))
                   end
 
                 fun transbody ({name, params, result, body, pos} : A.fundec, {tenv, venv}) =
                   let
                     val venv' = List.foldl transheaders venv decs
-                    val SOME(E.FunEntry({formals, result})) = Symbol.look(venv', name)
+                    val SOME(E.FunEntry({level, label, formals, result})) = Symbol.look(venv', name)
 
                     fun transparam ({name, escape, typ, pos}) =
                       case Symbol.look(tenv, typ) of
-                        NONE => (error pos ("invalid function parameter type " ^ (Symbol.name typ)); {name=name, ty=Ty.INT})
-                      | SOME(t) => {name=name, ty=t}
+                        NONE => (error pos ("invalid function parameter type " ^ (Symbol.name typ)); 
+                                {name=name, ty=Ty.INT, escape=escape})
+                      | SOME(t) => {name=name, ty=t, escape=escape}
 
                     (* evaluate body expression with processed parameter list and
                      previously (header-) augmented environment *)
                     val params' = List.map transparam params
-                    val venv'' = List.foldl (fn ({name, ty}, env) => Symbol.enter(env, name, E.VarEntry({ty=ty})))
+                    val venv'' = List.foldl (fn ({name, ty, escape}, env) => 
+                                Symbol.enter(env, name, E.VarEntry({access=(T.allocLocal level (!escape)),
+                                                                    ty=ty})))
                                 venv' params'
-                    val {exp, ty} = transExp(venv'', tenv) body
+                    val {exp, ty} = transExp(venv'', tenv, level) body
                   in
                     {venv=venv', tenv=tenv}
                   end
