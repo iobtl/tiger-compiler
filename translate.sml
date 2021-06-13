@@ -12,7 +12,10 @@ struct
                | Nx of Tree.stm
                | Cx of Temp.label * Temp.label -> Tree.stm
 
-  fun seq [x] = x
+  type frag = F.frag
+
+  val frag_list : frag list ref = ref []
+fun seq [x] = x
     | seq (x::x'::[]) = T.SEQ(x, x')
     | seq (x::x'::xs) = T.SEQ(x, T.SEQ(x', seq xs))
 
@@ -33,6 +36,14 @@ struct
   val nilexp = Ex(T.CONST(0))
 
   fun intExp i = Ex(T.CONST(i))
+
+  fun stringExp s = 
+    let
+      val lab = Temp.newlabel()
+    in
+      frag_list := (F.STRING(lab, s))::(!frag_list);
+      Ex(T.NAME(lab))
+    end
 
   fun unEx (Ex e) = e
     | unEx (Cx genstm) =
@@ -259,4 +270,13 @@ struct
 
   fun arrayExp (size, init) =
     Ex(F.externalCall("initArray", [unEx size, unEx init]))
+
+  fun procEntryExit ({level=Level({parent, frame}, _), body}) =
+    let
+      val ret = F.procEntryExit1(frame, T.MOVE(T.TEMP(F.RV), unEx body))
+    in
+      frag_list := F.PROC({body=ret, frame=frame})::(!frag_list); ()
+    end
+  
+  fun getResult () = (!frag_list)
 end

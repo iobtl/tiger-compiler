@@ -17,4 +17,9 @@ sig
   val simpleVar : access * level -> exp
   val fieldVar : exp * Symbol.symbol * Symbol.symbol list -> exp
   val subscriptVar : exp * Tree.exp -> exp
+
+  val procEntryExit : {level: level, body: exp} -> unit
+
+  structure Frame : FRAME
+  val getResult : unit -> Frame.frag list
 end

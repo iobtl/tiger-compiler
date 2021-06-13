@@ -52,7 +52,7 @@ struct
       val outer_level = T.newLevel {parent=T.outermost, 
                                     name=Temp.namedlabel "main", 
                                     formals=[]}
-      val translator = transExp(E.base_venv, E.base_tenv, outer_level)
+      val translator = transExp(E.base_venv, E.base_tenv, outer_level, Temp.newlabel())
     in
       (translator abExp; ())
     end
@@ -74,7 +74,7 @@ struct
           | trexp (A.IntExp(i)) =
                   {exp=T.intExp(i), ty=Ty.INT}
           | trexp (A.StringExp(s, pos)) =
-                  {exp=(), ty=Ty.STRING}
+                  {exp=T.stringExp(s), ty=Ty.STRING}
           | trexp (A.CallExp({func, args, pos})) =
                   let
                     val argtyps = case List.map trexp args of
@@ -169,10 +169,17 @@ struct
                   {exp=T.breakExp(break), ty=Ty.UNIT}
           | trexp (A.LetExp({decs, body, pos})) =
                   let
-                    val {venv=venv', tenv=tenv'} = List.foldl 
-                                         (fn (x, {venv, tenv}) => transDec (venv, tenv, level, x)) 
-                                         {venv=venv, tenv=tenv} decs
-                    val newTrexp = transExp(venv', tenv', level)
+                    val {venv=venv', tenv=tenv', exps} = List.foldl 
+                                         (fn (x, {venv, tenv, exps}) => 
+                                          let
+                                            val {venv=v, tenv=t, exps=e} = transDec(venv, tenv, level, x)
+                                          in
+                                            case e of
+                                              [] => {venv=v, tenv=t, exps=exps}
+                                            | _ => {venv=v, tenv=t, exps=e@exps}
+                                          end)
+                                         {venv=venv, tenv=tenv, exps=[]} decs
+                    val newTrexp = transExp(venv', tenv', level, break)
                   in
                     newTrexp body
                   end
@@ -228,19 +235,20 @@ struct
       trexp
     end
 
-  and transDec(venv, tenv, level, A.VarDec({name, escape, typ=NONE, init, pos})) =
+  and transDec(venv, tenv, level, break, A.VarDec({name, escape, typ=NONE, init, pos})) =
               let
-                val {exp, ty} = transExp(venv, tenv, level) init
+                val {exp, ty} = transExp(venv, tenv, level, break) init
                 val access = T.allocLocal level (!escape)
+                val var = T.simpleVar(access, level)
               in
                 {tenv=tenv, 
                  venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=ty})),
-                 exps=[exp]}
+                 exps=[T.assignExp(var, exp)]}
               end
 
-    | transDec(venv, tenv, level, A.VarDec({name, escape, typ=SOME(sym, sympos), init, pos})) =
+    | transDec(venv, tenv, level, break, A.VarDec({name, escape, typ=SOME(sym, sympos), init, pos})) =
               let
-                val {exp=initexp, ty=initty} = transExp(venv, tenv, level) init
+                val {exp=initexp, ty=initty} = transExp(venv, tenv, level, break) init
                 val {exp=typexp, ty=typty} =
                   case Symbol.look(tenv, sym) of
                     NONE => (error pos ("variable initialization type " ^ 
@@ -248,14 +256,15 @@ struct
                                         {exp=(), ty=Ty.NIL})
                   | SOME(ty) => {exp=(), ty=actual_ty ty}
                 val access = T.allocLocal level (!escape)
+                val var = T.simpleVar(access, level)
               in
                 checkType(initty, typty, "mismatching declaration type", pos);
                 {tenv=tenv, 
                  venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=typty})),
-                 exps=[initexp]}
+                 exps=[T.assignExp(var, initexp)]}
               end
 
-    | transDec(venv, tenv, level, A.TypeDec(decs)) =
+    | transDec(venv, tenv, level, break, A.TypeDec(decs)) =
               let
                 val tenv' = List.foldl (fn ({name, ...}, env) =>
                                        Symbol.enter(env, name, Ty.NAME(name, ref NONE)))
@@ -269,7 +278,7 @@ struct
                 {venv=venv, tenv=tenv'', exps=[]}
               end
 
-    | transDec(venv, tenv, level, A.FunctionDec(decs)) =
+    | transDec(venv, tenv, level, break, A.FunctionDec(decs)) =
               let
                 fun get_param_ty {name, typ, pos, escape} =
                   case Symbol.look(tenv, typ) of
@@ -320,7 +329,7 @@ struct
                                 Symbol.enter(env, name, E.VarEntry({access=(T.allocLocal level (!escape)),
                                                                     ty=ty})))
                                 venv' params'
-                    val {exp, ty} = transExp(venv'', tenv, level) body
+                    val {exp, ty} = transExp(venv'', tenv, level, break) body
                   in
                     {venv=venv', tenv=tenv, exps=[]}
                   end
