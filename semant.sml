@@ -71,7 +71,7 @@ struct
           | trexp (A.VarExp(v)) =
                   trvar v
           | trexp (A.NilExp) =
-                  {exp=(), ty=Ty.NIL}
+                  {exp=T.CONST(0), ty=Ty.NIL}
           | trexp (A.IntExp(i)) =
                   {exp=T.CONST(i), ty=Ty.INT}
           | trexp (A.StringExp(s, pos)) =
@@ -139,12 +139,12 @@ struct
                     checkType(Ty.INT, testty, "invalid test condition type", pos);
                     case else' of
                       NONE => (checkType(Ty.UNIT, thenty, "invalid expression type in if-then statement", pos); 
-                              {exp=(), ty=Ty.INT})
+                              {exp=T.ifThenExp(test, then'), ty=Ty.INT})
                     | SOME(e) => (let
                                     val {exp=elseexp, ty=elsety} = trexp e
                                   in
                                     (checkType(thenty, elsety, "mismatched types in then-else branches", pos);
-                                    {exp=(), ty=thenty})
+                                    {exp=T.ifThenElseExp(test, then', elseexp), ty=thenty})
                                   end)
                   end
           | trexp (A.WhileExp({test, body, pos})) =

@@ -56,8 +56,10 @@ struct
       end
     | unNx (Nx s) = s
 
-  fun unCx (Ex e) = (fn (t, f) => T.EXP(e))
-    | unCx (Cx genstm) = genstm
+  fun unCx (Cx s) = s
+    | unCx (Ex (T.CONST(0))) = (fn (t, f) => T.JUMP(T.NAME(f), [f]))
+    | unCx (Ex (T.CONST(1))) = (fn (t, f) => T.JUMP(T.NAME(t), [t]))
+    | unCx (Ex e) => (fn (t, f) => T.CJUMP(T.EQ, e, T.CONST(0), f, t))
 
   fun simpleVar (access, level) =
     let
@@ -93,33 +95,32 @@ struct
   fun subscriptVar (base_addr, sub_offset) =
     Ex(T.MEM(T.BINOP(T.PLUS, unEx base_addr, T.BINOP(T.MUL, sub_offset, T.CONST(F.wordSize)))))
 
-  fun arithmetic (left, oper, right) =
-    let
-      fun oper_ir oper =
-        case oper of
-          A.PlusOp => T.PLUS
-        | A.MinusOp => T.MINUS
-        | A.TimesOp => T.MUL
-        | A.DivideOp => T.DIV 
-    in
-      Ex(T.BINOP(oper_ir oper, left, right))
-    end
-
-  fun cond (left, oper ,right) =
-    let
-      fun oper_ir oper =
-        case oper of
-          A.EqOp => T.EQ
-        | A.NeqOp => T.NE
-        | A.LtOp => T.LT
-        | A.LeOp => T.LE
-        | A.GtOp => T.GT
-        | A.GeOp => T.GE
-    in
-      Cx((fn (t, f) => T.CJUMP(oper_ir oper, left, right, t, f)))
-    end
-
   fun opExp (left, oper, right) =
+    fun arithmetic (left, oper, right) =
+      let
+        fun oper_ir oper =
+          case oper of
+            A.PlusOp => T.PLUS
+          | A.MinusOp => T.MINUS
+          | A.TimesOp => T.MUL
+          | A.DivideOp => T.DIV 
+      in
+        Ex(T.BINOP(oper_ir oper, left, right))
+      end
+
+    fun cond (left, oper ,right) =
+      let
+        fun oper_ir oper =
+          case oper of
+            A.EqOp => T.EQ
+          | A.NeqOp => T.NE
+          | A.LtOp => T.LT
+          | A.LeOp => T.LE
+          | A.GtOp => T.GT
+          | A.GeOp => T.GE
+      in
+        Cx((fn (t, f) => T.CJUMP(oper_ir oper, left, right, t, f)))
+      end
     let
       datatype oper_type = ARITHMETIC | COMP
       val lefte = unEx left
@@ -131,5 +132,65 @@ struct
         | COMP => comp(lefte, oper, righte)
     in
       call_oper_func oper
+    end
+
+  fun ifThenElseExp (test, then', else') =
+    let
+      val test_func = unCx test
+      val r = Temp.newtemp()
+      val t = Temp.newlabel()
+      val f = Temp.newlabel()
+      val join = Temp.newlabel()
+    in
+      case then' of (* then' and else' must have the same type; type-checked in semant *)
+        Ex(e) => Ex(T.ESEQ(seq([test_func(t, f),
+                                T.LABEL(t),
+                                T.MOVE(T.TEMP(r), unEx then'),
+                                T.JUMP(T.NAME(join), [join]),
+                                T.LABEL(f),
+                                T.MOVE(T.TEMP(r), unEx else'),
+                                T.JUMP(T.NAME(join), [join]),
+                                T.LABEL(join)]),
+                           T.TEMP(r)))
+        Nx(s) => Nx(seq(([test_func(t, f),
+                          T.LABEL(t),
+                          unNx then',
+                          T.JUMP(T.NAME(join), [join]),
+                          T.LABEL(f),
+                          unNx else',
+                          T.JUMP(T.NAME(join), [join]), (* just fall through? *)
+                          T.LABEL(join)])))
+        Cx(f) => (* e.g. if a > b then c > d else 0 *)
+          let
+            val y = Temp.newlabel()
+            val z = Temp.newlabel()
+          in
+            Cx(fn (t', f') =>
+                seq([test_func(t, f),
+                     seq([T.LABEL(t),
+                          (unCx then') (t', f'),
+                          T.JUMP(T.NAME(join), [join]),
+                          T.LABEL(f),
+                          (unCx else') (t', f'),
+                          T.JUMP(T.NAME(join), [join]),
+                          T.LABEL(join)])]))
+          end
+    end
+
+  fun ifThenExp (test, then') =
+    let
+      val test_func = unCx test
+      val t = Temp.newlabel()
+      val f = Temp.newlabel()
+      val join = Temp.newlabel()
+    in
+      case then' of (* by convention, if no 'else', result of whole if-then is unit (T.stm) *)
+        Nx(s) => Nx(seq(([test_func(t, f),
+                          T.LABEL(t),
+                          unNx s,
+                          T.JUMP(T.NAME(join), [join]),
+                          T.LABEL(f),
+                          T.JUMP(T.NAME(join), [join]),
+                          T.LABEL(join)])))
     end
 end
