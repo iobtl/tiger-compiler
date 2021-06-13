@@ -57,8 +57,7 @@ struct
       (translator abExp; ())
     end
 
-  and transExp(venv, tenv, level) =
-    (* Arithmetic operations *)
+  and transExp(venv, tenv, level, break) =
     let fun trexp (A.OpExp({left, oper, right, pos})) =
                   let
                     val leftex = trexp left
@@ -71,9 +70,9 @@ struct
           | trexp (A.VarExp(v)) =
                   trvar v
           | trexp (A.NilExp) =
-                  {exp=T.CONST(0), ty=Ty.NIL}
+                  {exp=T.nilExp, ty=Ty.NIL}
           | trexp (A.IntExp(i)) =
-                  {exp=T.CONST(i), ty=Ty.INT}
+                  {exp=T.intExp(i), ty=Ty.INT}
           | trexp (A.StringExp(s, pos)) =
                   {exp=(), ty=Ty.STRING}
           | trexp (A.CallExp({func, args, pos})) =
@@ -81,16 +80,18 @@ struct
                     val argtyps = case List.map trexp args of
                       [] => []
                     | xs => List.map #ty xs
-                    val {formals=formtyps, result=result} = 
+                    val {level=call_level, formals=formtyps, result=result} = 
                       case Symbol.look(venv, func) of
-                        SOME(E.FunEntry({level, label, formals, result})) => {formals=formals, result=result}
-                      | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; {formals=[], result=Ty.INT})
-                      | NONE => (error pos "function not found in current environment"; {formals=[], result=Ty.INT})
+                        SOME(E.FunEntry({level, label, formals, result})) => {level=level, formals=formals, result=result}
+                      | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; 
+                                               {level=T.Top, formals=[], result=Ty.NIL})
+                      | NONE => (error pos "function not found in current environment"; 
+                                {level=T.Top, formals=[], result=Ty.NIL})
                   in
                     case ListPair.allEq (fn (a, b) => a = b) (argtyps, formtyps) of
                       false => (error pos ("invalid argument type passed to function " ^ (Symbol.name func));
-                               {exp=(), ty=Ty.INT})
-                    | true => {exp=(), ty=actual_ty result}
+                               {exp=T.err, ty=Ty.NIL})
+                    | true => {exp=T.callExp(func, args, level, call_level), ty=actual_ty result}
                   end
           | trexp (A.RecordExp({fields, typ, pos})) =
                   let
@@ -103,7 +104,7 @@ struct
                         (ListPair.zip (recls, fieldls))
 
                     val record_ty = case Symbol.look (tenv, typ) of
-                      NONE => (error pos ("undefined record type " ^ (Symbol.name typ)); Ty.INT)
+                      NONE => (error pos ("undefined record type " ^ (Symbol.name typ)); Ty.NIL)
                     | SOME(ty) => (print ("processed record " ^ (Symbol.name typ) ^ "\n"); ty)
                   in
                     case actual_ty record_ty of
@@ -112,24 +113,24 @@ struct
                           val fieldls = List.map (fn (_, exp, _) => trexp exp) fields
                           val fieldtyps = List.map (fn ({exp, ty}) => ty) fieldls
                         in
-                          check_record(rectyps, fieldtyps, pos); {exp=(), ty=Ty.RECORD(rectyps, u)}
+                          check_record(rectyps, fieldtyps, pos); {exp=T.recordExp fields, ty=Ty.RECORD(rectyps, u)}
                         end
-                      | _ => (error pos ("undefined record type " ^ (Symbol.name typ)); {exp=(), ty=Ty.INT})
+                      | _ => (error pos ("undefined record type " ^ (Symbol.name typ)); {exp=T.err, ty=Ty.NIL})
                   end
           | trexp (A.SeqExp(expls)) =
                   let
                     val res = List.map trexp (List.map (fn (exp, _) => exp) expls)
                   in
                     case res of
-                      [] => {exp=(), ty=Ty.UNIT}
+                      [] => {exp=T.nilExp, ty=Ty.UNIT}
                     | _ => List.last res
                   end
           | trexp (A.AssignExp({var, exp, pos})) =
                   let
-                    val vres = trvar var
-                    val eres = trexp exp
+                    val {exp=varres, ty=_} = trvar var
+                    val {exp=expres, ty=_} = trexp exp
                   in
-                    {exp=(), ty=Ty.UNIT}
+                    {exp=T.assignExp(varres, expres), ty=Ty.UNIT}
                   end
           | trexp (A.IfExp({test, then', else', pos})) =
                   let
@@ -153,7 +154,7 @@ struct
                     val {exp=bodyexp, ty=bodyty} = trexp body
                   in
                     checkType(Ty.INT, testty, "invalid test condition type", pos);
-                    {exp=(), ty=bodyty}
+                    {exp=T.whileExp(testexp, bodyexp, break), ty=bodyty}
                   end
           | trexp (A.ForExp({var, escape, lo, hi, body, pos})) =
                   let
@@ -162,10 +163,10 @@ struct
                     val {exp=bodyexp, ty=bodyty} = trexp body
                   in
                     checkType(loty, hity, "mismatched bounds types in for loop", pos);
-                    {exp=(), ty=bodyty}
+                    {exp=T.forExp(loexp, hiexp, bodyexp, break), ty=bodyty}
                   end
-          | trexp (A.BreakExp(pos)) = (* need to check if within for/while statement *)
-                  {exp=(), ty=Ty.UNIT}
+          | trexp (A.BreakExp(_)) = (* need to check if within for/while statement *)
+                  {exp=T.breakExp(break), ty=Ty.UNIT}
           | trexp (A.LetExp({decs, body, pos})) =
                   let
                     val {venv=venv', tenv=tenv'} = List.foldl 
@@ -178,18 +179,19 @@ struct
           | trexp (A.ArrayExp({typ, size, init, pos})) =
                   let
                     val array_ty = case Symbol.look(tenv, typ) of
-                      NONE => (error pos ("undefined array type " ^ (Symbol.name typ)); Ty.INT)
+                      NONE => (error pos ("undefined array type " ^ (Symbol.name typ)); Ty.NIL)
                     | SOME(ty) => ty
 
-                    val {exp=_, ty=sizety} = trexp size
-                    val {exp=_, ty=initty} = trexp init
+                    val {exp=sizeexp, ty=sizety} = trexp size
+                    val {exp=initexp, ty=initty} = trexp init
                   in
                     case actual_ty array_ty of
                       Ty.ARRAY(aty, u) =>
                         (checkType(Ty.INT, sizety, "invalid array size type", pos);
                         checkType(aty, initty, "mismatching array initialization type", pos);
-                        {exp=(), ty=Ty.ARRAY(aty, u)})
-                    | _ => (error pos ("undefined array type " ^ (Symbol.name typ)); {exp=(), ty=Ty.INT})
+                        {exp=T.arrayExp(sizeexp, initexp), ty=Ty.ARRAY(aty, u)})
+                    | _ => (error pos ("undefined array type " ^ (Symbol.name typ)); 
+                           {exp=T.err, ty=Ty.NIL})
                   end
         and trvar (A.SimpleVar(sym, pos)) =
                   (case Symbol.look(venv, sym) of
@@ -232,7 +234,8 @@ struct
                 val access = T.allocLocal level (!escape)
               in
                 {tenv=tenv, 
-                 venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=ty}))}
+                 venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=ty})),
+                 exps=[exp]}
               end
 
     | transDec(venv, tenv, level, A.VarDec({name, escape, typ=SOME(sym, sympos), init, pos})) =
@@ -248,7 +251,8 @@ struct
               in
                 checkType(initty, typty, "mismatching declaration type", pos);
                 {tenv=tenv, 
-                 venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=typty}))}
+                 venv=Symbol.enter(venv, name, E.VarEntry({access=access, ty=typty})),
+                 exps=[initexp]}
               end
 
     | transDec(venv, tenv, level, A.TypeDec(decs)) =
@@ -262,7 +266,7 @@ struct
                                             (r := SOME(transTy(env, ty)); env))
                                         tenv' decs
               in
-                {venv=venv, tenv=tenv''}
+                {venv=venv, tenv=tenv'', exps=[]}
               end
 
     | transDec(venv, tenv, level, A.FunctionDec(decs)) =
@@ -318,7 +322,7 @@ struct
                                 venv' params'
                     val {exp, ty} = transExp(venv'', tenv, level) body
                   in
-                    {venv=venv', tenv=tenv}
+                    {venv=venv', tenv=tenv, exps=[]}
                   end
               in
                 List.foldl transbody {venv=venv, tenv=tenv} decs

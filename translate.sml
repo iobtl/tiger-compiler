@@ -30,6 +30,9 @@ struct
       Level({parent, frame}, _) => (level, F.allocLocal frame esc)
 
   val err = Ex(T.CONST(0))
+  val nilexp = Ex(T.CONST(0))
+
+  fun intExp i = Ex(T.CONST(i))
 
   fun unEx (Ex e) = e
     | unEx (Cx genstm) =
@@ -134,6 +137,8 @@ struct
       call_oper_func oper
     end
 
+  fun assignExp (var, exp) = Nx(T.MOVE(unEx var, unEx exp))
+
   fun ifThenElseExp (test, then', else') =
     let
       val test_func = unCx test
@@ -193,4 +198,65 @@ struct
                           T.JUMP(T.NAME(join), [join]),
                           T.LABEL(join)])))
     end
+
+  fun callExp (name, args, caller_level, callee_level) =
+    (* Two cases to be aware of when calculating static link: 
+       1. Function calling ownself/function on same level (caller_level = callee_level)
+       2. Nested function calling an outer function (caller_level '<' callee_level *)
+    let
+      fun join_link (fp, level) =
+        let
+          val Level({parent=curr_parent, frame=curr_frame}, curr_ref) = level
+          val static_link = hd (F.formals curr_frame)
+        in
+          if curr_ref = dec_ref
+          then F.exp dec_access fp
+          else join_link(F.exp static_link fp, curr_parent)
+        end
+
+      val Level({parent=_, })
+    in
+      Ex(join_link(T.TEMP(F.FP), caller_level))
+    end
+
+  fun whileExp (test, body, break) =
+    let
+      val test_lab = Temp.newlabel()
+      val body_lab = Temp.newlabel()
+    in
+      Nx(seq([T.LABEL(test_lab),
+              T.CJUMP(T.EQ, unEx test, T.CONST(1), body_lab, break),
+              T.LABEL(body_lab),
+              unNx body,
+              T.JUMP(T.NAME(test_lab), [test_lab]),
+              T.LABEL(break)])) (* evaluate condition to expression value *)
+    end
+
+  fun forExp (lo, hi, body, break) =
+    let
+      val test_lab = Temp.newlabel()
+      val body_lab = Temp.newlabel()
+      val inc_lab = Temp.newlabel()
+      val i = Temp.newtemp()
+    in
+      Nx(seq([T.MOVE(T.TEMP(i), unEx lo),
+              T.LABEL(test_lab),
+              T.CJUMP(T.LE, T.TEMP(i), unEx hi, body_lab, break),
+              T.LABEL(body_lab),
+              unNx body,
+              T.CJUMP(T.LT, T.TEMP(i), unEx hi, inc_lab, break), (* account for hi = maxint *)
+              T.LABEL(inc_lab),
+              T.MOVE(T.TEMP(i), T.BINOP(T.PLUS, T.TEMP(i), T.CONST(1))),
+              T.JUMP(T.NAME(test_lab), [test_lab]),
+              T.LABEL(break)]))
+    end
+
+  fun recordExp fields =
+    Ex(F.externalCall("allocRecord", [T.CONST((List.length fields) * F.wordSize)]))
+   
+  fun breakExp break =
+    Nx(T.JUMP(T.NAME(break), [break]))
+
+  fun arrayExp (size, init) =
+    Ex(F.externalCall("initArray", [unEx size, unEx init]))
 end

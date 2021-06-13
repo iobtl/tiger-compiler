@@ -38,4 +38,7 @@ struct
 
   fun exp (InFrame(k)) addr = T.MEM(T.BINOP(T.PLUS, addr, T.CONST(k)))    
     | exp (InReg(t)) _ = T.TEMP(t)
+
+  fun externalCall (s, args) =
+    T.CALL(T.NAME(Temp.namedlabel(s)), args)
 end
