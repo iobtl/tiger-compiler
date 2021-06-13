@@ -21,6 +21,8 @@ parse.sml
 tiger.lex
 tiger.grm
 findescape.sml
+tree.sml
+printtree.sml
 $/smlnj-lib.cm
 $/basis.cm
 $/ml-yacc-lib.cm

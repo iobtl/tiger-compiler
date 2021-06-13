@@ -59,52 +59,21 @@ struct
 
   and transExp(venv, tenv, level) =
     (* Arithmetic operations *)
-    let fun trexp (A.OpExp({left, oper=A.PlusOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.MinusOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.TimesOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.DivideOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.LtOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.LeOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.GtOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.GeOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.EqOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
-          | trexp (A.OpExp({left, oper=A.NeqOp, right, pos})) =
-                  (checkInt(trexp left, pos);
-                   checkInt(trexp right, pos);
-                   {exp=(), ty=Ty.INT})
+    let fun trexp (A.OpExp({left, oper, right, pos})) =
+                  let
+                    val leftex = trexp left
+                    val rightex = trexp right
+                  in
+                    checkInt(leftex);
+                    checkInt(rightex);
+                    {exp=T.opExp(left, oper, right), ty=Ty.INT}
+                  end
           | trexp (A.VarExp(v)) =
                   trvar v
           | trexp (A.NilExp) =
                   {exp=(), ty=Ty.NIL}
           | trexp (A.IntExp(i)) =
-                  {exp=(), ty=Ty.INT}
+                  {exp=T.CONST(i), ty=Ty.INT}
           | trexp (A.StringExp(s, pos)) =
                   {exp=(), ty=Ty.STRING}
           | trexp (A.CallExp({func, args, pos})) =
@@ -224,33 +193,34 @@ struct
                   end
         and trvar (A.SimpleVar(sym, pos)) =
                   (case Symbol.look(venv, sym) of
-                      SOME(E.VarEntry({access, ty})) => {exp=(), ty=actual_ty ty}
+                      SOME(E.VarEntry({access, ty})) => {exp=T.simpleVar(access, level),
+                                                         ty=actual_ty ty}
                     | SOME(E.FunEntry(_)) => (error pos ("expected variable but got function " ^
-                                             (Symbol.name sym)); {exp=(), ty=Ty.INT})
+                                             (Symbol.name sym)); {exp=T.err, ty=Ty.NIL})
                     | NONE => (error pos ("undefined variable " ^ (Symbol.name sym));
-                              {exp=(), ty=Ty.INT}))
+                              {exp=T.err, ty=Ty.NIL}))
           | trvar (A.FieldVar(var, sym, pos)) =
                   let
-                    val {exp=_, ty=vty} = trvar var
+                    val {exp=varres, ty=vty} = trvar var
                   in
                     case actual_ty vty of
                       Ty.RECORD(fieldls, u) =>
                         if List.exists (fn (x, _) => x = sym) fieldls
-                        then {exp=(), ty=actual_ty vty}
+                        then {exp=T.fieldVar(varres, sym, fieldls), ty=actual_ty vty}
                         else (error pos ("record field " ^ (Symbol.name sym) ^ " not found");
-                             {exp=(), ty=Ty.INT})
-                    | _ => (error pos "variable not of record type"; {exp=(), ty=Ty.INT})
+                             {exp=T.err, ty=Ty.NIL})
+                    | _ => (error pos "variable not of record type"; {exp=T.err, ty=Ty.NIL})
                   end
           | trvar (A.SubscriptVar(var, subexp, pos)) =
                   let
-                    val {exp=_, ty=subty} = trexp subexp
-                    val {exp=_, ty=vty} = trvar var
+                    val {exp=subres, ty=subty} = trexp subexp
+                    val {exp=varres, ty=vty} = trvar var
                   in
                     case actual_ty vty of
                       Ty.ARRAY(ty, u) =>
                         (checkType(Ty.INT, subty, "subscript expression not of type int", pos);
-                        {exp=(), ty=actual_ty ty})
-                    | _ => (error pos "variable not of array type"; {exp=(), ty=Ty.INT})
+                        {exp=T.subscriptVar(varres, subres), ty=actual_ty ty})
+                    | _ => (error pos "variable not of array type"; {exp=T.err, ty=Ty.NIL})
                   end
     in
       trexp
