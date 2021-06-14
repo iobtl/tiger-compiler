@@ -223,6 +223,7 @@ struct
                           T.LABEL(f),
                           T.JUMP(T.NAME(join), [join]),
                           T.LABEL(join)]))
+      | _ => err
     end
 
   fun callExp (label, args, caller_level, callee_level, is_unit) =

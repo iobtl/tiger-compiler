@@ -85,7 +85,7 @@ struct
                         SOME(E.FunEntry({level, label, formals, result})) => {level=level, label=label, formals=formals, result=result}
                       | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; 
                                                {level=T.outermost, label=Temp.namedlabel("err"), formals=[], result=Ty.NIL})
-                      | NONE => (error pos "function not found in current environment"; 
+                      | NONE => (error pos ("function " ^ (Symbol.name func) ^ " not found in current environment"); 
                                 {level=T.outermost, label=Temp.namedlabel("err"), formals=[], result=Ty.NIL})
                   in
                     case ListPair.allEq (fn (a, b) => a = b) (List.map #ty argexps, formtyps) of
