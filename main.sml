@@ -20,7 +20,14 @@ struct
                     "../testcases/test6.tig",
                     "../testcases/test7.tig",
                     "../testcases/test8.tig",
-                    "../testcases/test9.tig"]
+                    "../testcases/test9.tig",
+                    "../testcases/test10.tig",
+                    "../testcases/test11.tig",
+                    "../testcases/test12.tig",
+                    "../testcases/test13.tig",
+                    "../testcases/test14.tig",
+                    "../testcases/test15.tig",
+                    "../testcases/test16.tig"]
       val abExps = List.map Parse.parse fnames
     in
       List.map Sem.transProg abExps

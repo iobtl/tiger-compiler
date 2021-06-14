@@ -104,7 +104,7 @@ struct
 
                     val record_ty = case Symbol.look (tenv, typ) of
                       NONE => (error pos ("undefined record type " ^ (Symbol.name typ)); Ty.NIL)
-                    | SOME(ty) => (print ("processed record " ^ (Symbol.name typ) ^ "\n"); ty)
+                    | SOME(ty) => ty
                   in
                     case actual_ty record_ty of
                       Ty.RECORD(rectyps, u) =>

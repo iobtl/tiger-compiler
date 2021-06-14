@@ -1,7 +1,3 @@
-2 shift/reduce conflicts
-
-error:  state 31: shift/reduce conflict (shift FUNCTION, reduce by rule 18)
-error:  state 34: shift/reduce conflict (shift TYPE, reduce by rule 6)
 
 state 0:
 
@@ -657,14 +653,12 @@ state 30:
 
 	.	reduce by rule 5
 
-error:  state 31: shift/reduce conflict (shift FUNCTION, reduce by rule 18)
 
 state 31:
 
 	func_declaration_ls : func_declaration .  (reduce by rule 18)
 	func_declaration_ls : func_declaration . func_declaration_ls 
 
-	FUNCTION	shift 39
 
 	func_declaration	goto 31
 	func_declaration_ls	goto 64
@@ -674,29 +668,27 @@ state 31:
 
 state 32:
 
-	declaration : var_declaration .  (reduce by rule 4)
+	declaration : var_declaration .  (reduce by rule 3)
+
+
+
+	.	reduce by rule 3
+
+
+state 33:
+
+	declaration : ty_declaration_ls .  (reduce by rule 4)
 
 
 
 	.	reduce by rule 4
 
 
-state 33:
-
-	declaration : ty_declaration_ls .  (reduce by rule 3)
-
-
-
-	.	reduce by rule 3
-
-error:  state 34: shift/reduce conflict (shift TYPE, reduce by rule 6)
-
 state 34:
 
 	ty_declaration_ls : ty_declaration .  (reduce by rule 6)
 	ty_declaration_ls : ty_declaration . ty_declaration_ls 
 
-	TYPE	shift 37
 
 	ty_declaration	goto 34
 	ty_declaration_ls	goto 65
@@ -2723,5 +2715,5 @@ state 137:
 
 	.	error
 
-540 of 1051 action table entries left after compaction
+538 of 1049 action table entries left after compaction
 144 goto table entries

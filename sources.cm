@@ -18,6 +18,7 @@ types.sml
 errormsg.sml
 main.sml
 parse.sml
+prabsyn.sml
 tiger.lex
 tiger.grm
 findescape.sml

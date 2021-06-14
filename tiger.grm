@@ -12,7 +12,7 @@ type symbol = Symbol.symbol
   | AND | OR | ASSIGN
   | ARRAY | IF | THEN | ELSE | WHILE | FOR | TO | DO | LET | IN | END | OF 
   | BREAK | NIL
-  | FUNCTION | VAR | TYPE 
+  | FUNCTION | VAR | TYPE | FUNDEC | TYDEC
 
 %nonterm  exp of A.exp 
         | program of A.exp 
@@ -43,12 +43,14 @@ type symbol = Symbol.symbol
 %nonassoc DO
 %nonassoc ELSE
 %nonassoc ASSIGN
+%nonassoc FUNCTION TYPE VAR
 %left OR
 %left AND 
 %nonassoc EQ NEQ LT LE GT GE
 %left PLUS MINUS
 %left TIMES DIVIDE
 %left UMINUS
+%left FUNDEC TYDEC
 
 %name Tiger
 
@@ -70,13 +72,13 @@ declaration_list :               ([])
   | declaration declaration_list (declaration::declaration_list)
 
 declaration : 
-    ty_declaration_ls   (A.TypeDec(ty_declaration_ls))
-  | var_declaration     (var_declaration)
+    var_declaration     (var_declaration)
+  | ty_declaration_ls   (A.TypeDec(ty_declaration_ls))
   | func_declaration_ls (A.FunctionDec(func_declaration_ls))
 
 ty_declaration_ls :
-    ty_declaration                    ([ty_declaration])
-  | ty_declaration ty_declaration_ls  (ty_declaration::ty_declaration_ls)
+    ty_declaration %prec TYDEC         ([ty_declaration])
+  | ty_declaration ty_declaration_ls   (ty_declaration::ty_declaration_ls)
 
 ty_declaration : TYPE ID EQ ty ({name=(Symbol.symbol ID), ty=ty, pos=TYPEleft})
 
@@ -95,14 +97,13 @@ var_declaration :
     VAR ID ASSIGN exp          (A.VarDec({name=(Symbol.symbol ID), escape=ref true, typ=NONE, init=exp, pos=IDleft}))
   | VAR ID COLON ID ASSIGN exp (A.VarDec({name=(Symbol.symbol ID1), escape=ref true, typ=SOME(Symbol.symbol ID2, ID2left), init=exp, pos=ID1left}))
 
-func_declaration_ls :
-    func_declaration                     ([func_declaration])
+func_declaration_ls :                    
+    func_declaration %prec FUNDEC        ([func_declaration])
   | func_declaration func_declaration_ls (func_declaration::func_declaration_ls)
 
 func_declaration :
     FUNCTION ID LPAREN ty_fields RPAREN EQ exp          ({name=(Symbol.symbol ID), params=ty_fields, result=NONE, body=exp, pos=FUNCTIONleft})
   | FUNCTION ID LPAREN ty_fields RPAREN COLON ID EQ exp ({name=(Symbol.symbol ID1), params=ty_fields, result=SOME(Symbol.symbol ID2, ID2left), body=exp, pos=FUNCTIONleft})
-
 
 field_list :                   ([])
   | ID EQ exp                  ([(Symbol.symbol ID, exp, IDleft)])

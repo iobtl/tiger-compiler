@@ -136,7 +136,7 @@ val table=let val actionRows =
 \\143\000\000\000\
 \\144\000\000\000\
 \\145\000\000\000\
-\\146\000\045\000\039\000\000\000\
+\\146\000\000\000\
 \\147\000\000\000\
 \\148\000\000\000\
 \\149\000\000\000\
@@ -152,7 +152,7 @@ val table=let val actionRows =
 \\157\000\015\000\031\000\016\000\030\000\018\000\029\000\019\000\028\000\
 \\020\000\027\000\021\000\026\000\022\000\025\000\023\000\024\000\
 \\024\000\023\000\025\000\022\000\026\000\021\000\027\000\020\000\000\000\
-\\158\000\043\000\041\000\000\000\
+\\158\000\000\000\
 \\159\000\000\000\
 \\160\000\015\000\031\000\016\000\030\000\018\000\029\000\019\000\028\000\
 \\020\000\027\000\021\000\026\000\022\000\025\000\023\000\024\000\
@@ -232,7 +232,7 @@ val actionRowNumbers =
 \\009\000\009\000\009\000\009\000\
 \\009\000\009\000\009\000\009\000\
 \\009\000\009\000\051\000\064\000\
-\\050\000\049\000\052\000\047\000\
+\\049\000\050\000\052\000\047\000\
 \\042\000\012\000\013\000\014\000\
 \\040\000\035\000\033\000\082\000\
 \\025\000\075\000\068\000\009\000\
@@ -556,6 +556,8 @@ fn (T 0) => "EOF"
   | (T 42) => "FUNCTION"
   | (T 43) => "VAR"
   | (T 44) => "TYPE"
+  | (T 45) => "FUNDEC"
+  | (T 46) => "TYDEC"
   | _ => "bogus-term"
 local open Header in
 val errtermvalue=
@@ -565,12 +567,13 @@ fn (T 1) => MlyValue.ID(fn () => ("bogus")) |
 _ => MlyValue.VOID
 end
 val terms : term list = nil
- $$ (T 44) $$ (T 43) $$ (T 42) $$ (T 41) $$ (T 40) $$ (T 39) $$ (T 38)
- $$ (T 37) $$ (T 36) $$ (T 35) $$ (T 34) $$ (T 33) $$ (T 32) $$ (T 31)
- $$ (T 30) $$ (T 29) $$ (T 28) $$ (T 27) $$ (T 26) $$ (T 25) $$ (T 24)
- $$ (T 23) $$ (T 22) $$ (T 21) $$ (T 20) $$ (T 19) $$ (T 18) $$ (T 17)
- $$ (T 16) $$ (T 15) $$ (T 14) $$ (T 13) $$ (T 12) $$ (T 11) $$ (T 10)
- $$ (T 9) $$ (T 8) $$ (T 7) $$ (T 6) $$ (T 5) $$ (T 4) $$ (T 0)end
+ $$ (T 46) $$ (T 45) $$ (T 44) $$ (T 43) $$ (T 42) $$ (T 41) $$ (T 40)
+ $$ (T 39) $$ (T 38) $$ (T 37) $$ (T 36) $$ (T 35) $$ (T 34) $$ (T 33)
+ $$ (T 32) $$ (T 31) $$ (T 30) $$ (T 29) $$ (T 28) $$ (T 27) $$ (T 26)
+ $$ (T 25) $$ (T 24) $$ (T 23) $$ (T 22) $$ (T 21) $$ (T 20) $$ (T 19)
+ $$ (T 18) $$ (T 17) $$ (T 16) $$ (T 15) $$ (T 14) $$ (T 13) $$ (T 12)
+ $$ (T 11) $$ (T 10) $$ (T 9) $$ (T 8) $$ (T 7) $$ (T 6) $$ (T 5) $$ 
+(T 4) $$ (T 0)end
 structure Actions =
 struct 
 exception mlyAction of int
@@ -601,16 +604,7 @@ end)
  in ( LrTable.NT 7, ( result, declaration1left, declaration_list1right
 ), rest671)
 end
-|  ( 3, ( ( _, ( MlyValue.ty_declaration_ls ty_declaration_ls1, 
-ty_declaration_ls1left, ty_declaration_ls1right)) :: rest671)) => let
- val  result = MlyValue.declaration (fn _ => let val  (
-ty_declaration_ls as ty_declaration_ls1) = ty_declaration_ls1 ()
- in (A.TypeDec(ty_declaration_ls))
-end)
- in ( LrTable.NT 8, ( result, ty_declaration_ls1left, 
-ty_declaration_ls1right), rest671)
-end
-|  ( 4, ( ( _, ( MlyValue.var_declaration var_declaration1, 
+|  ( 3, ( ( _, ( MlyValue.var_declaration var_declaration1, 
 var_declaration1left, var_declaration1right)) :: rest671)) => let val 
  result = MlyValue.declaration (fn _ => let val  (var_declaration as 
 var_declaration1) = var_declaration1 ()
@@ -618,6 +612,15 @@ var_declaration1) = var_declaration1 ()
 end)
  in ( LrTable.NT 8, ( result, var_declaration1left, 
 var_declaration1right), rest671)
+end
+|  ( 4, ( ( _, ( MlyValue.ty_declaration_ls ty_declaration_ls1, 
+ty_declaration_ls1left, ty_declaration_ls1right)) :: rest671)) => let
+ val  result = MlyValue.declaration (fn _ => let val  (
+ty_declaration_ls as ty_declaration_ls1) = ty_declaration_ls1 ()
+ in (A.TypeDec(ty_declaration_ls))
+end)
+ in ( LrTable.NT 8, ( result, ty_declaration_ls1left, 
+ty_declaration_ls1right), rest671)
 end
 |  ( 5, ( ( _, ( MlyValue.func_declaration_ls func_declaration_ls1, 
 func_declaration_ls1left, func_declaration_ls1right)) :: rest671)) =>
@@ -1233,6 +1236,10 @@ ParserData.MlyValue.VOID,p1,p2))
 fun VAR (p1,p2) = Token.TOKEN (ParserData.LrTable.T 43,(
 ParserData.MlyValue.VOID,p1,p2))
 fun TYPE (p1,p2) = Token.TOKEN (ParserData.LrTable.T 44,(
+ParserData.MlyValue.VOID,p1,p2))
+fun FUNDEC (p1,p2) = Token.TOKEN (ParserData.LrTable.T 45,(
+ParserData.MlyValue.VOID,p1,p2))
+fun TYDEC (p1,p2) = Token.TOKEN (ParserData.LrTable.T 46,(
 ParserData.MlyValue.VOID,p1,p2))
 end
 end
