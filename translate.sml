@@ -1,6 +1,6 @@
 structure Translate : TRANSLATE = 
 struct 
-  structure F = MipsFrame
+  structure F : FRAME = MipsFrame
   structure T = Tree
   structure A = Absyn
   
@@ -15,7 +15,7 @@ struct
   type frag = F.frag
 
   val frag_list : frag list ref = ref []
-fun seq [x] = x
+  fun seq [x] = x
     | seq (x::x'::[]) = T.SEQ(x, x')
     | seq (x::x'::xs) = T.SEQ(x, T.SEQ(x', seq xs))
 
@@ -31,19 +31,6 @@ fun seq [x] = x
   fun allocLocal (level : level) esc =
     case level of
       Level({parent, frame}, _) => (level, F.allocLocal frame esc)
-
-  val err = Ex(T.CONST(0))
-  val nilexp = Ex(T.CONST(0))
-
-  fun intExp i = Ex(T.CONST(i))
-
-  fun stringExp s = 
-    let
-      val lab = Temp.newlabel()
-    in
-      frag_list := (F.STRING(lab, s))::(!frag_list);
-      Ex(T.NAME(lab))
-    end
 
   fun unEx (Ex e) = e
     | unEx (Cx genstm) =
@@ -73,7 +60,20 @@ fun seq [x] = x
   fun unCx (Cx s) = s
     | unCx (Ex (T.CONST(0))) = (fn (t, f) => T.JUMP(T.NAME(f), [f]))
     | unCx (Ex (T.CONST(1))) = (fn (t, f) => T.JUMP(T.NAME(t), [t]))
-    | unCx (Ex e) => (fn (t, f) => T.CJUMP(T.EQ, e, T.CONST(0), f, t))
+    | unCx (Ex e) = (fn (t, f) => T.CJUMP(T.EQ, e, T.CONST(0), f, t))
+
+  val err = Ex(T.CONST(0))
+  val nilexp = Ex(T.CONST(0))
+
+  fun intExp i = Ex(T.CONST(i))
+
+  fun stringExp s = 
+    let
+      val lab = Temp.newlabel()
+    in
+      frag_list := (F.STRING(lab, s))::(!frag_list);
+      Ex(T.NAME(lab))
+    end
 
   fun simpleVar (access, level) =
     let
@@ -107,43 +107,57 @@ fun seq [x] = x
     end
 
   fun subscriptVar (base_addr, sub_offset) =
-    Ex(T.MEM(T.BINOP(T.PLUS, unEx base_addr, T.BINOP(T.MUL, sub_offset, T.CONST(F.wordSize)))))
+    Ex(T.MEM(T.BINOP(T.PLUS, unEx base_addr, T.BINOP(T.MUL, unEx sub_offset, T.CONST(F.wordSize)))))
 
   fun opExp (left, oper, right) =
-    fun arithmetic (left, oper, right) =
-      let
-        fun oper_ir oper =
-          case oper of
-            A.PlusOp => T.PLUS
-          | A.MinusOp => T.MINUS
-          | A.TimesOp => T.MUL
-          | A.DivideOp => T.DIV 
-      in
-        Ex(T.BINOP(oper_ir oper, left, right))
-      end
-
-    fun cond (left, oper ,right) =
-      let
-        fun oper_ir oper =
-          case oper of
-            A.EqOp => T.EQ
-          | A.NeqOp => T.NE
-          | A.LtOp => T.LT
-          | A.LeOp => T.LE
-          | A.GtOp => T.GT
-          | A.GeOp => T.GE
-      in
-        Cx((fn (t, f) => T.CJUMP(oper_ir oper, left, right, t, f)))
-      end
     let
-      datatype oper_type = ARITHMETIC | COMP
+      fun arithmetic (left, oper, right) =
+        let
+          fun oper_ir oper =
+            case oper of
+              A.PlusOp => T.PLUS
+            | A.MinusOp => T.MINUS
+            | A.TimesOp => T.MUL
+            | A.DivideOp => T.DIV 
+        in
+          Ex(T.BINOP(oper_ir oper, left, right))
+        end
+
+      fun comp (left, oper ,right) =
+        let
+          fun oper_ir oper =
+            case oper of
+              A.EqOp => T.EQ
+            | A.NeqOp => T.NE
+            | A.LtOp => T.LT
+            | A.LeOp => T.LE
+            | A.GtOp => T.GT
+            | A.GeOp => T.GE
+        in
+          Cx((fn (t, f) => T.CJUMP(oper_ir oper, left, right, t, f)))
+        end
+
       val lefte = unEx left
       val righte = unEx right
 
+      datatype oper_type = ARITHMETIC | COMP
+
+      fun get_oper_type A.PlusOp = ARITHMETIC
+        | get_oper_type A.MinusOp = ARITHMETIC
+        | get_oper_type A.TimesOp = ARITHMETIC
+        | get_oper_type A.DivideOp = ARITHMETIC
+        | get_oper_type A.EqOp = COMP
+        | get_oper_type A.NeqOp = COMP
+        | get_oper_type A.LtOp = COMP
+        | get_oper_type A.LeOp = COMP
+        | get_oper_type A.GtOp = COMP
+        | get_oper_type A.GeOp = COMP
+
       fun call_oper_func oper =
-        case oper_type oper of
+        case get_oper_type oper of
           ARITHMETIC => arithmetic(lefte, oper, righte)
         | COMP => comp(lefte, oper, righte)
+
     in
       call_oper_func oper
     end
@@ -168,15 +182,15 @@ fun seq [x] = x
                                 T.JUMP(T.NAME(join), [join]),
                                 T.LABEL(join)]),
                            T.TEMP(r)))
-        Nx(s) => Nx(seq(([test_func(t, f),
+      | Nx(s) => Nx(seq([test_func(t, f),
                           T.LABEL(t),
                           unNx then',
                           T.JUMP(T.NAME(join), [join]),
                           T.LABEL(f),
                           unNx else',
                           T.JUMP(T.NAME(join), [join]), (* just fall through? *)
-                          T.LABEL(join)])))
-        Cx(f) => (* e.g. if a > b then c > d else 0 *)
+                          T.LABEL(join)]))
+      | Cx(c) => (* e.g. if a > b then c > d else 0 *)
           let
             val y = Temp.newlabel()
             val z = Temp.newlabel()
@@ -201,33 +215,37 @@ fun seq [x] = x
       val join = Temp.newlabel()
     in
       case then' of (* by convention, if no 'else', result of whole if-then is unit (T.stm) *)
-        Nx(s) => Nx(seq(([test_func(t, f),
+        Nx(s) => Nx(seq([test_func(t, f),
                           T.LABEL(t),
-                          unNx s,
+                          s,
                           T.JUMP(T.NAME(join), [join]),
                           T.LABEL(f),
                           T.JUMP(T.NAME(join), [join]),
-                          T.LABEL(join)])))
+                          T.LABEL(join)]))
     end
 
-  fun callExp (name, args, caller_level, callee_level) =
-    (* Two cases to be aware of when calculating static link: 
-       1. Function calling ownself/function on same level (caller_level = callee_level)
-       2. Nested function calling an outer function (caller_level '<' callee_level *)
+  fun callExp (label, args, caller_level, callee_level, is_unit) =
+    (* need to obtain static link of callee function from caller_level *)
     let
-      fun join_link (fp, level) =
+      fun comp_depth Top = 0
+        | comp_depth (Level({parent, frame}, _)) = 1 + comp_depth parent
+
+      fun find_link (diff, level) =
         let
-          val Level({parent=curr_parent, frame=curr_frame}, curr_ref) = level
-          val static_link = hd (F.formals curr_frame)
+          val Level({parent, frame}, _) = level
         in
-          if curr_ref = dec_ref
-          then F.exp dec_access fp
-          else join_link(F.exp static_link fp, curr_parent)
+          case diff of
+            0 => T.TEMP(F.FP) (* caller function is direct parent of callee function *)
+          | _ => F.exp (hd (F.formals frame)) (find_link(diff-1, parent))
         end
 
-      val Level({parent=_, })
+      (* functions can only be used at depths >= their defined level + 1 *)
+      val nest_diff = (comp_depth caller_level) - (comp_depth callee_level) + 1
+      val res = T.CALL(T.NAME(label), (find_link(nest_diff, caller_level))::(List.map unEx args))
     in
-      Ex(join_link(T.TEMP(F.FP), caller_level))
+      if is_unit
+      then Nx(T.EXP(res))
+      else Ex(res)
     end
 
   fun whileExp (test, body, break) =
@@ -262,11 +280,15 @@ fun seq [x] = x
               T.LABEL(break)]))
     end
 
+  (* need to initialize individual fields as well *)
   fun recordExp fields =
     Ex(F.externalCall("allocRecord", [T.CONST((List.length fields) * F.wordSize)]))
    
   fun breakExp break =
     Nx(T.JUMP(T.NAME(break), [break]))
+
+  fun letExp (assignls, body) =
+    Ex(T.ESEQ(seq(List.map unNx assignls), unEx body))
 
   fun arrayExp (size, init) =
     Ex(F.externalCall("initArray", [unEx size, unEx init]))

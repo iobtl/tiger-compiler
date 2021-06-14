@@ -4,10 +4,12 @@ struct
 
   datatype access = InFrame of int
                   | InReg of Temp.temp
-  datatype frag = PROC of {body: Tree.stm, frame: frame}
-                | STRING of Temp.label * string
+
   type frame = {formals: access list, instructs: int,
                 locals: int ref, name: Temp.label}
+
+  datatype frag = PROC of {body: Tree.stm, frame: frame}
+                | STRING of Temp.label * string
 
   val FP = Temp.newtemp()
   val RV = Temp.newtemp()

@@ -18,7 +18,7 @@ struct
     (*| Ty.RECORD(fieldls, u) => Ty.RECORD(List.map (fn (s, t) => (s, actual_ty t)) fieldls, u)*)
     | _ => ty
 
-  fun checkInt ({exp, ty}, pos) =
+  fun checkInt (ty, pos) =
     case ty of
       Ty.INT => ()
     | _ => error pos "integer required"
@@ -54,44 +54,43 @@ struct
                                     formals=[]}
       val translator = transExp(E.base_venv, E.base_tenv, outer_level, Temp.newlabel())
     in
-      (translator abExp; ())
+      (translator abExp; T.getResult())
     end
 
   and transExp(venv, tenv, level, break) =
     let fun trexp (A.OpExp({left, oper, right, pos})) =
                   let
-                    val leftex = trexp left
-                    val rightex = trexp right
+                    val {exp=leftex, ty=leftty} = trexp left
+                    val {exp=rightex, ty=rightty} = trexp right
                   in
-                    checkInt(leftex);
-                    checkInt(rightex);
-                    {exp=T.opExp(left, oper, right), ty=Ty.INT}
+                    checkInt(leftty, pos);
+                    checkInt(rightty, pos);
+                    {exp=T.opExp(leftex, oper, rightex), ty=Ty.INT}
                   end
           | trexp (A.VarExp(v)) =
                   trvar v
           | trexp (A.NilExp) =
-                  {exp=T.nilExp, ty=Ty.NIL}
+                  {exp=T.nilexp, ty=Ty.NIL}
           | trexp (A.IntExp(i)) =
                   {exp=T.intExp(i), ty=Ty.INT}
           | trexp (A.StringExp(s, pos)) =
                   {exp=T.stringExp(s), ty=Ty.STRING}
           | trexp (A.CallExp({func, args, pos})) =
                   let
-                    val argtyps = case List.map trexp args of
-                      [] => []
-                    | xs => List.map #ty xs
-                    val {level=call_level, formals=formtyps, result=result} = 
+                    val argexps = List.map trexp args
+                    val {level=call_level, label=label, formals=formtyps, result=result} = 
                       case Symbol.look(venv, func) of
-                        SOME(E.FunEntry({level, label, formals, result})) => {level=level, formals=formals, result=result}
+                        SOME(E.FunEntry({level, label, formals, result})) => {level=level, label=label, formals=formals, result=result}
                       | SOME(E.VarEntry(_)) => (error pos "expected function but found variable"; 
-                                               {level=T.Top, formals=[], result=Ty.NIL})
+                                               {level=T.outermost, label=Temp.namedlabel("err"), formals=[], result=Ty.NIL})
                       | NONE => (error pos "function not found in current environment"; 
-                                {level=T.Top, formals=[], result=Ty.NIL})
+                                {level=T.outermost, label=Temp.namedlabel("err"), formals=[], result=Ty.NIL})
                   in
-                    case ListPair.allEq (fn (a, b) => a = b) (argtyps, formtyps) of
+                    case ListPair.allEq (fn (a, b) => a = b) (List.map #ty argexps, formtyps) of
                       false => (error pos ("invalid argument type passed to function " ^ (Symbol.name func));
                                {exp=T.err, ty=Ty.NIL})
-                    | true => {exp=T.callExp(func, args, level, call_level), ty=actual_ty result}
+                    | true => {exp=T.callExp(label, List.map #exp argexps, level, call_level, result=Ty.UNIT), 
+                               ty=actual_ty result}
                   end
           | trexp (A.RecordExp({fields, typ, pos})) =
                   let
@@ -111,9 +110,10 @@ struct
                       Ty.RECORD(rectyps, u) =>
                         let
                           val fieldls = List.map (fn (_, exp, _) => trexp exp) fields
+                          val fieldexps = List.map (fn ({exp, ty}) => exp) fieldls
                           val fieldtyps = List.map (fn ({exp, ty}) => ty) fieldls
                         in
-                          check_record(rectyps, fieldtyps, pos); {exp=T.recordExp fields, ty=Ty.RECORD(rectyps, u)}
+                          check_record(rectyps, fieldtyps, pos); {exp=T.recordExp fieldexps, ty=Ty.RECORD(rectyps, u)}
                         end
                       | _ => (error pos ("undefined record type " ^ (Symbol.name typ)); {exp=T.err, ty=Ty.NIL})
                   end
@@ -122,7 +122,7 @@ struct
                     val res = List.map trexp (List.map (fn (exp, _) => exp) expls)
                   in
                     case res of
-                      [] => {exp=T.nilExp, ty=Ty.UNIT}
+                      [] => {exp=T.nilexp, ty=Ty.UNIT}
                     | _ => List.last res
                   end
           | trexp (A.AssignExp({var, exp, pos})) =
@@ -140,12 +140,12 @@ struct
                     checkType(Ty.INT, testty, "invalid test condition type", pos);
                     case else' of
                       NONE => (checkType(Ty.UNIT, thenty, "invalid expression type in if-then statement", pos); 
-                              {exp=T.ifThenExp(test, then'), ty=Ty.INT})
+                              {exp=T.ifThenExp(testexp, thenexp), ty=Ty.INT})
                     | SOME(e) => (let
                                     val {exp=elseexp, ty=elsety} = trexp e
                                   in
                                     (checkType(thenty, elsety, "mismatched types in then-else branches", pos);
-                                    {exp=T.ifThenElseExp(test, then', elseexp), ty=thenty})
+                                    {exp=T.ifThenElseExp(testexp, thenexp, elseexp), ty=thenty})
                                   end)
                   end
           | trexp (A.WhileExp({test, body, pos})) =
@@ -172,16 +172,16 @@ struct
                     val {venv=venv', tenv=tenv', exps} = List.foldl 
                                          (fn (x, {venv, tenv, exps}) => 
                                           let
-                                            val {venv=v, tenv=t, exps=e} = transDec(venv, tenv, level, x)
+                                            val {venv=v, tenv=t, exps=e} = transDec(venv, tenv, level, break, x)
                                           in
                                             case e of
                                               [] => {venv=v, tenv=t, exps=exps}
                                             | _ => {venv=v, tenv=t, exps=e@exps}
                                           end)
                                          {venv=venv, tenv=tenv, exps=[]} decs
-                    val newTrexp = transExp(venv', tenv', level, break)
+                    val {exp=bodyexp, ty=bodyty} = transExp(venv', tenv', level, break) body
                   in
-                    newTrexp body
+                    {exp=T.letExp(exps, bodyexp), ty=bodyty}
                   end
           | trexp (A.ArrayExp({typ, size, init, pos})) =
                   let
@@ -215,7 +215,8 @@ struct
                     case actual_ty vty of
                       Ty.RECORD(fieldls, u) =>
                         if List.exists (fn (x, _) => x = sym) fieldls
-                        then {exp=T.fieldVar(varres, sym, fieldls), ty=actual_ty vty}
+                        then {exp=T.fieldVar(varres, sym, List.map (fn (x, _) => x) fieldls), 
+                              ty=actual_ty vty}
                         else (error pos ("record field " ^ (Symbol.name sym) ^ " not found");
                              {exp=T.err, ty=Ty.NIL})
                     | _ => (error pos "variable not of record type"; {exp=T.err, ty=Ty.NIL})
@@ -311,7 +312,7 @@ struct
                                                         result=return_ty}))
                   end
 
-                fun transbody ({name, params, result, body, pos} : A.fundec, {tenv, venv}) =
+                fun transbody ({name, params, result, body, pos} : A.fundec, {tenv, venv, exps}) =
                   let
                     val venv' = List.foldl transheaders venv decs
                     val SOME(E.FunEntry({level, label, formals, result})) = Symbol.look(venv', name)
@@ -331,10 +332,11 @@ struct
                                 venv' params'
                     val {exp, ty} = transExp(venv'', tenv, level, break) body
                   in
+                    T.procEntryExit({level=level, body=exp}); 
                     {venv=venv', tenv=tenv, exps=[]}
                   end
               in
-                List.foldl transbody {venv=venv, tenv=tenv} decs
+                List.foldl transbody {venv=venv, tenv=tenv, exps=[]} decs
               end
 
   and transTy(tenv, A.NameTy(sym, pos)) =
