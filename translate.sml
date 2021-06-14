@@ -283,8 +283,21 @@ struct
     end
 
   (* need to initialize individual fields as well *)
-  fun recordExp fields =
-    Ex(F.externalCall("allocRecord", [T.CONST((List.length fields) * F.wordSize)]))
+  fun recordExp fieldexps =
+    let
+
+      val exps = List.map unEx fieldexps
+      val r = Temp.newtemp()
+      val i = ref (List.length exps)
+      val base = T.MOVE(T.TEMP(r), 
+                       F.externalCall("allocRecord", [T.CONST((List.length fieldexps) * F.wordSize)]))
+
+      fun alloc_field n exp =
+        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP(r), T.CONST(n * F.wordSize))), exp)
+    in
+      Ex(T.ESEQ(seq(base::(List.foldl (fn (e, acc) => (i := (!i) - 1; (alloc_field (!i) e)::acc)) [] exps)),
+            T.TEMP(r)))
+    end
    
   fun breakExp break =
     Nx(T.JUMP(T.NAME(break), [break]))
