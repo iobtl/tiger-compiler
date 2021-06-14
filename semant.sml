@@ -37,15 +37,15 @@ struct
       else ()
   end
 
-  fun printType ty =
-    print (case ty of
+  fun stringType ty =
+    case ty of
       Ty.RECORD(_, _) => "record"
     | Ty.NIL => "nil"
     | Ty.INT => "int"
     | Ty.STRING => "string"
     | Ty.ARRAY(_, _) => "array" 
     | Ty.NAME(_, _) => "name"
-    | Ty.UNIT => "unit")
+    | Ty.UNIT => "unit"
 
   fun transProg abExp =
     let
@@ -63,8 +63,10 @@ struct
                     val {exp=leftex, ty=leftty} = trexp left
                     val {exp=rightex, ty=rightty} = trexp right
                   in
-                    checkInt(leftty, pos);
-                    checkInt(rightty, pos);
+                    checkType(leftty, rightty, 
+                              "mismatching types used in operation: '" 
+                              ^ stringType leftty ^ "' '" ^ stringType rightty ^ "'", 
+                              pos);
                     {exp=T.opExp(leftex, oper, rightex), ty=Ty.INT}
                   end
           | trexp (A.VarExp(v)) =
