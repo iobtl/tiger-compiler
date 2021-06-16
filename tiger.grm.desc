@@ -1,3 +1,6 @@
+1 shift/reduce conflict
+
+error:  state 14: shift/reduce conflict (shift LBRACK, reduce by rule 31)
 
 state 0:
 
@@ -18,62 +21,33 @@ state 0:
 	exp	goto 3
 	program	goto 137
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
 
 state 1:
 
-	exp : lval' .  (reduce by rule 36)
-	lval : lval' .  (reduce by rule 32)
-	lval' : lval' . LBRACK exp RBRACK 
-
-	EOF	reduce by rule 36
-	COMMA	reduce by rule 36
-	SEMICOLON	reduce by rule 36
-	RPAREN	reduce by rule 36
-	LBRACK	shift 15
-	RBRACK	reduce by rule 36
-	RBRACE	reduce by rule 36
-	DOT	reduce by rule 32
-	PLUS	reduce by rule 36
-	MINUS	reduce by rule 36
-	TIMES	reduce by rule 36
-	DIVIDE	reduce by rule 36
-	EQ	reduce by rule 36
-	NEQ	reduce by rule 36
-	LT	reduce by rule 36
-	LE	reduce by rule 36
-	GT	reduce by rule 36
-	GE	reduce by rule 36
-	AND	reduce by rule 36
-	OR	reduce by rule 36
-	ASSIGN	reduce by rule 32
-	THEN	reduce by rule 36
-	ELSE	reduce by rule 36
-	TO	reduce by rule 36
-	DO	reduce by rule 36
-	IN	reduce by rule 36
-	END	reduce by rule 36
-	FUNCTION	reduce by rule 36
-	VAR	reduce by rule 36
-	TYPE	reduce by rule 36
+	exp : array_init .  (reduce by rule 44)
 
 
-	.	error
+
+	.	reduce by rule 44
 
 
 state 2:
 
+	exp : lval .  (reduce by rule 36)
 	exp : lval . ASSIGN exp 
-	lval' : lval . DOT ID 
+	lval : lval . DOT ID 
+	lval : lval . LBRACK exp RBRACK 
 
-	DOT	shift 17
-	ASSIGN	shift 16
+	LBRACK	shift 17
+	DOT	shift 16
+	ASSIGN	shift 15
 
 
-	.	error
+	.	reduce by rule 36
 
 
 state 3:
@@ -174,7 +148,7 @@ state 8:
 
 	exp	goto 41
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -198,7 +172,7 @@ state 9:
 
 	exp	goto 42
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -221,7 +195,7 @@ state 10:
 
 	exp	goto 43
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -244,8 +218,8 @@ state 11:
 
 	exp	goto 45
 	lval	goto 2
-	lval'	goto 1
 	exp_seq	goto 44
+	array_init	goto 1
 
 	.	reduce by rule 28
 
@@ -267,76 +241,25 @@ state 13:
 
 	.	reduce by rule 38
 
+error:  state 14: shift/reduce conflict (shift LBRACK, reduce by rule 31)
 
 state 14:
 
-	exp : ID .  (reduce by rule 35)
 	exp : ID . LPAREN exps RPAREN 
 	exp : ID . LBRACE field_list RBRACE 
-	exp : ID . LBRACK exp RBRACK OF exp 
 	lval : ID .  (reduce by rule 31)
+	lval : ID . LBRACK exp RBRACK 
+	array_init : ID . LBRACK exp RBRACK OF exp 
 
-	EOF	reduce by rule 35
-	COMMA	reduce by rule 35
-	SEMICOLON	reduce by rule 35
 	LPAREN	shift 48
-	RPAREN	reduce by rule 35
 	LBRACK	shift 47
-	RBRACK	reduce by rule 35
 	LBRACE	shift 46
-	RBRACE	reduce by rule 35
-	DOT	reduce by rule 31
-	PLUS	reduce by rule 35
-	MINUS	reduce by rule 35
-	TIMES	reduce by rule 35
-	DIVIDE	reduce by rule 35
-	EQ	reduce by rule 35
-	NEQ	reduce by rule 35
-	LT	reduce by rule 35
-	LE	reduce by rule 35
-	GT	reduce by rule 35
-	GE	reduce by rule 35
-	AND	reduce by rule 35
-	OR	reduce by rule 35
-	ASSIGN	reduce by rule 31
-	THEN	reduce by rule 35
-	ELSE	reduce by rule 35
-	TO	reduce by rule 35
-	DO	reduce by rule 35
-	IN	reduce by rule 35
-	END	reduce by rule 35
-	FUNCTION	reduce by rule 35
-	VAR	reduce by rule 35
-	TYPE	reduce by rule 35
 
 
-	.	error
+	.	reduce by rule 31
 
 
 state 15:
-
-	lval' : lval' LBRACK . exp RBRACK 
-
-	ID	shift 14
-	INT	shift 13
-	STRING	shift 12
-	LPAREN	shift 11
-	MINUS	shift 10
-	IF	shift 9
-	WHILE	shift 8
-	FOR	shift 7
-	LET	shift 6
-	BREAK	shift 5
-	NIL	shift 4
-
-	exp	goto 49
-	lval	goto 2
-	lval'	goto 1
-
-	.	error
-
-
-state 16:
 
 	exp : lval ASSIGN . exp 
 
@@ -352,19 +275,42 @@ state 16:
 	BREAK	shift 5
 	NIL	shift 4
 
-	exp	goto 50
+	exp	goto 49
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
+
+	.	error
+
+
+state 16:
+
+	lval : lval DOT . ID 
+
+	ID	shift 50
+
 
 	.	error
 
 
 state 17:
 
-	lval' : lval DOT . ID 
+	lval : lval LBRACK . exp RBRACK 
 
-	ID	shift 51
+	ID	shift 14
+	INT	shift 13
+	STRING	shift 12
+	LPAREN	shift 11
+	MINUS	shift 10
+	IF	shift 9
+	WHILE	shift 8
+	FOR	shift 7
+	LET	shift 6
+	BREAK	shift 5
+	NIL	shift 4
 
+	exp	goto 51
+	lval	goto 2
+	array_init	goto 1
 
 	.	error
 
@@ -387,7 +333,7 @@ state 18:
 
 	exp	goto 52
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -410,7 +356,7 @@ state 19:
 
 	exp	goto 53
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -433,7 +379,7 @@ state 20:
 
 	exp	goto 54
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -456,7 +402,7 @@ state 21:
 
 	exp	goto 55
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -479,7 +425,7 @@ state 22:
 
 	exp	goto 56
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -502,7 +448,7 @@ state 23:
 
 	exp	goto 57
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -525,7 +471,7 @@ state 24:
 
 	exp	goto 58
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -548,7 +494,7 @@ state 25:
 
 	exp	goto 59
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -571,7 +517,7 @@ state 26:
 
 	exp	goto 60
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -594,7 +540,7 @@ state 27:
 
 	exp	goto 61
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -617,7 +563,7 @@ state 28:
 
 	exp	goto 62
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -640,7 +586,7 @@ state 29:
 
 	exp	goto 63
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -915,7 +861,8 @@ state 46:
 
 state 47:
 
-	exp : ID LBRACK . exp RBRACK OF exp 
+	lval : ID LBRACK . exp RBRACK 
+	array_init : ID LBRACK . exp RBRACK OF exp 
 
 	ID	shift 14
 	INT	shift 13
@@ -931,7 +878,7 @@ state 47:
 
 	exp	goto 78
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -954,47 +901,13 @@ state 48:
 
 	exp	goto 80
 	lval	goto 2
-	lval'	goto 1
 	exps	goto 79
+	array_init	goto 1
 
 	.	reduce by rule 25
 
 
 state 49:
-
-	exp : exp . MINUS exp 
-	exp : exp . DIVIDE exp 
-	exp : exp . TIMES exp 
-	exp : exp . EQ exp 
-	exp : exp . NEQ exp 
-	exp : exp . GT exp 
-	exp : exp . LT exp 
-	exp : exp . GE exp 
-	exp : exp . LE exp 
-	exp : exp . AND exp 
-	exp : exp . OR exp 
-	exp : exp . PLUS exp 
-	lval' : lval' LBRACK exp . RBRACK 
-
-	RBRACK	shift 81
-	PLUS	shift 29
-	MINUS	shift 28
-	TIMES	shift 27
-	DIVIDE	shift 26
-	EQ	shift 25
-	NEQ	shift 24
-	LT	shift 23
-	LE	shift 22
-	GT	shift 21
-	GE	shift 20
-	AND	shift 19
-	OR	shift 18
-
-
-	.	error
-
-
-state 50:
 
 	exp : lval ASSIGN exp .  (reduce by rule 45)
 	exp : exp . MINUS exp 
@@ -1027,13 +940,47 @@ state 50:
 	.	reduce by rule 45
 
 
-state 51:
+state 50:
 
-	lval' : lval DOT ID .  (reduce by rule 33)
+	lval : lval DOT ID .  (reduce by rule 33)
 
 
 
 	.	reduce by rule 33
+
+
+state 51:
+
+	exp : exp . MINUS exp 
+	exp : exp . DIVIDE exp 
+	exp : exp . TIMES exp 
+	exp : exp . EQ exp 
+	exp : exp . NEQ exp 
+	exp : exp . GT exp 
+	exp : exp . LT exp 
+	exp : exp . GE exp 
+	exp : exp . LE exp 
+	exp : exp . AND exp 
+	exp : exp . OR exp 
+	exp : exp . PLUS exp 
+	lval : lval LBRACK exp . RBRACK 
+
+	RBRACK	shift 81
+	PLUS	shift 29
+	MINUS	shift 28
+	TIMES	shift 27
+	DIVIDE	shift 26
+	EQ	shift 25
+	NEQ	shift 24
+	LT	shift 23
+	LE	shift 22
+	GT	shift 21
+	GE	shift 20
+	AND	shift 19
+	OR	shift 18
+
+
+	.	error
 
 
 state 52:
@@ -1484,8 +1431,8 @@ state 67:
 
 	exp	goto 45
 	lval	goto 2
-	lval'	goto 1
 	exp_seq	goto 82
+	array_init	goto 1
 
 	.	reduce by rule 28
 
@@ -1541,7 +1488,7 @@ state 71:
 
 	exp	goto 87
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -1564,7 +1511,7 @@ state 72:
 
 	exp	goto 88
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -1588,7 +1535,7 @@ state 73:
 
 	exp	goto 89
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -1620,8 +1567,8 @@ state 75:
 
 	exp	goto 45
 	lval	goto 2
-	lval'	goto 1
 	exp_seq	goto 90
+	array_init	goto 1
 
 	.	reduce by rule 28
 
@@ -1649,7 +1596,6 @@ state 77:
 
 state 78:
 
-	exp : ID LBRACK exp . RBRACK OF exp 
 	exp : exp . MINUS exp 
 	exp : exp . DIVIDE exp 
 	exp : exp . TIMES exp 
@@ -1662,6 +1608,8 @@ state 78:
 	exp : exp . AND exp 
 	exp : exp . OR exp 
 	exp : exp . PLUS exp 
+	lval : ID LBRACK exp . RBRACK 
+	array_init : ID LBRACK exp . RBRACK OF exp 
 
 	RBRACK	shift 93
 	PLUS	shift 29
@@ -1728,7 +1676,7 @@ state 80:
 
 state 81:
 
-	lval' : lval' LBRACK exp RBRACK .  (reduce by rule 34)
+	lval : lval LBRACK exp RBRACK .  (reduce by rule 34)
 
 
 
@@ -1776,7 +1724,7 @@ state 84:
 
 	exp	goto 101
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -1944,19 +1892,20 @@ state 92:
 
 	exp	goto 109
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
 
 state 93:
 
-	exp : ID LBRACK exp RBRACK . OF exp 
+	lval : ID LBRACK exp RBRACK .  (reduce by rule 32)
+	array_init : ID LBRACK exp RBRACK . OF exp 
 
 	OF	shift 110
 
 
-	.	error
+	.	reduce by rule 32
 
 
 state 94:
@@ -1986,8 +1935,8 @@ state 95:
 
 	exp	goto 80
 	lval	goto 2
-	lval'	goto 1
 	exps	goto 111
+	array_init	goto 1
 
 	.	reduce by rule 25
 
@@ -2148,7 +2097,7 @@ state 107:
 
 	exp	goto 119
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2171,7 +2120,7 @@ state 108:
 
 	exp	goto 120
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2213,7 +2162,7 @@ state 109:
 
 state 110:
 
-	exp : ID LBRACK exp RBRACK OF . exp 
+	array_init : ID LBRACK exp RBRACK OF . exp 
 
 	ID	shift 14
 	INT	shift 13
@@ -2229,7 +2178,7 @@ state 110:
 
 	exp	goto 122
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2281,7 +2230,7 @@ state 114:
 
 	exp	goto 125
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2410,7 +2359,6 @@ state 121:
 
 state 122:
 
-	exp : ID LBRACK exp RBRACK OF exp .  (reduce by rule 44)
 	exp : exp . MINUS exp 
 	exp : exp . DIVIDE exp 
 	exp : exp . TIMES exp 
@@ -2423,6 +2371,7 @@ state 122:
 	exp : exp . AND exp 
 	exp : exp . OR exp 
 	exp : exp . PLUS exp 
+	array_init : ID LBRACK exp RBRACK OF exp .  (reduce by rule 35)
 
 	PLUS	shift 29
 	MINUS	shift 28
@@ -2438,7 +2387,7 @@ state 122:
 	OR	shift 18
 
 
-	.	reduce by rule 44
+	.	reduce by rule 35
 
 
 state 123:
@@ -2510,7 +2459,7 @@ state 126:
 
 	exp	goto 132
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2561,7 +2510,7 @@ state 130:
 
 	exp	goto 134
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2669,7 +2618,7 @@ state 135:
 
 	exp	goto 136
 	lval	goto 2
-	lval'	goto 1
+	array_init	goto 1
 
 	.	error
 
@@ -2715,5 +2664,5 @@ state 137:
 
 	.	error
 
-538 of 1049 action table entries left after compaction
+480 of 991 action table entries left after compaction
 144 goto table entries

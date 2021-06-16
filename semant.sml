@@ -129,9 +129,11 @@ struct
                   end
           | trexp (A.AssignExp({var, exp, pos})) =
                   let
-                    val {exp=varres, ty=_} = trvar var
-                    val {exp=expres, ty=_} = trexp exp
+                    val {exp=varres, ty=varty} = trvar var
+                    val {exp=expres, ty=expty} = trexp exp
                   in
+                    checkType(varty, expty, "mismatched types used in expression; assigning " ^
+                              (stringType expty) ^ " to " ^ (stringType varty) ^ " variable", pos);
                     {exp=T.assignExp(varres, expres), ty=Ty.UNIT}
                   end
           | trexp (A.IfExp({test, then', else', pos})) =
@@ -216,11 +218,11 @@ struct
                   in
                     case actual_ty vty of
                       Ty.RECORD(fieldls, u) =>
-                        if List.exists (fn (x, _) => x = sym) fieldls
-                        then {exp=T.fieldVar(varres, sym, List.map (fn (x, _) => x) fieldls), 
-                              ty=actual_ty vty}
-                        else (error pos ("record field " ^ (Symbol.name sym) ^ " not found");
-                             {exp=T.err, ty=Ty.NIL})
+                        (case List.find (fn (x, _) => x = sym) fieldls of
+                          NONE => (error pos ("record field " ^ (Symbol.name sym) ^ " not found");
+                                  {exp=T.err, ty=Ty.NIL})
+                        | SOME(r) => {exp=T.fieldVar(varres, sym, List.map (fn (x, _) => x) fieldls), 
+                                     ty=actual_ty (#2 r)})
                     | _ => (error pos "variable not of record type"; {exp=T.err, ty=Ty.NIL})
                   end
           | trvar (A.SubscriptVar(var, subexp, pos)) =

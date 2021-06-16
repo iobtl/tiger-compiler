@@ -15,7 +15,7 @@ struct
   type frag = F.frag
 
   val frag_list : frag list ref = ref []
-  fun seq [] = (print "no expression in sequence"; T.EXP(T.CONST(0)))
+  fun seq [] = T.EXP(T.CONST(0))
     | seq [x] = x
     | seq (x::x'::[]) = T.SEQ(x, x')
     | seq (x::x'::xs) = T.SEQ(x, T.SEQ(x', seq xs))

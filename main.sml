@@ -1,35 +1,39 @@
-structure Main =
-struct
-  structure P = Parse
-  structure Sem = Semant
+structure Main = struct
 
-  fun main filename =
-    let
-      val abExp = Parse.parse filename
-    in
-      Sem.transProg abExp
-    end
+   structure Tr = Translate
+   structure F = Frame
+   structure R = RegAlloc
 
-  fun try () =
-    let
-      val fnames = ["../testcases/test1.tig",
-                    "../testcases/test2.tig",
-                    "../testcases/test3.tig",
-                    "../testcases/test4.tig",
-                    "../testcases/test5.tig",
-                    "../testcases/test6.tig",
-                    "../testcases/test7.tig",
-                    "../testcases/test8.tig",
-                    "../testcases/test9.tig",
-                    "../testcases/test10.tig",
-                    "../testcases/test11.tig",
-                    "../testcases/test12.tig",
-                    "../testcases/test13.tig",
-                    "../testcases/test14.tig",
-                    "../testcases/test15.tig",
-                    "../testcases/test16.tig"]
-      val abExps = List.map Parse.parse fnames
-    in
-      List.map Sem.transProg abExps
-    end
+ fun getsome (SOME x) = x
+
+   fun emitproc out (F.PROC{body,frame}) =
+     let val _ = print ("emit " ^ Frame.name frame ^ "\n")
+(*         val _ = Printtree.printtree(out,body); *)
+	 val stms = Canon.linearize body
+(*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
+         val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
+	 val instrs =   List.concat(map (Mips.codegen frame) stms') 
+         val format0 = Assem.format(Temp.makestring)
+      in  app (fn i => TextIO.output(out,format0 i)) instrs;
+     end
+     end
+    | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))
+
+   fun withOpenFile fname f = 
+       let val out = TextIO.openOut fname
+        in (f out before TextIO.closeOut out) 
+	    handle e => (TextIO.closeOut out; raise e)
+       end 
+
+   fun compile filename = 
+       let val absyn = Parse.parse filename
+           val frags = (FindEscape.prog absyn; Semant.transProg absyn)
+        in 
+            withOpenFile (filename ^ ".s") 
+	     (fn out => (app (emitproc out) frags))
+       end
+
 end
+
+
+

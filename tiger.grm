@@ -17,7 +17,6 @@ type symbol = Symbol.symbol
 %nonterm  exp of A.exp 
         | program of A.exp 
         | lval of A.var 
-        | lval' of A.var 
         | exps of A.exp list 
         | exp_seq of (A.exp * pos) list
         | field_list of (symbol * A.exp * pos) list 
@@ -31,6 +30,7 @@ type symbol = Symbol.symbol
         | var_declaration of A.dec
         | func_declaration of A.fundec
         | func_declaration_ls of A.fundec list
+        | array_init of A.exp
 
 
 %pos int
@@ -118,16 +118,15 @@ exp_seq :                 ([])
   | exp SEMICOLON exp_seq ((exp, expleft)::exp_seq)
 
 lval : 
-    ID    (A.SimpleVar(Symbol.symbol ID, IDleft))
-  | lval' (lval')
+    ID                     (A.SimpleVar(Symbol.symbol ID, IDleft))
+  | ID LBRACK exp RBRACK   (A.SubscriptVar(A.SimpleVar(Symbol.symbol ID, IDleft), exp, IDleft))
+  | lval DOT ID            (A.FieldVar(lval, Symbol.symbol ID, lvalleft))
+  | lval LBRACK exp RBRACK (A.SubscriptVar(lval, exp, lvalleft)) (* circumvent shift-reduce conflict; ID LBRACK exp RBRACK _OF_ exp; parser cannot look ahead to OF *)
 
-lval' : 
-    lval DOT ID             (A.FieldVar(lval, Symbol.symbol ID, lvalleft))
-  | lval' LBRACK exp RBRACK (A.SubscriptVar(lval', exp, lval'left)) (* circumvent shift-reduce conflict; ID LBRACK exp RBRACK _OF_ exp; parser cannot look ahead to OF *)
+array_init : ID LBRACK exp RBRACK OF exp (A.ArrayExp({typ=(Symbol.symbol ID), size=exp1, init=exp2, pos=IDleft}))
 
 exp: 			                     
-    ID                                   (A.VarExp(A.SimpleVar(Symbol.symbol ID, IDleft)))
-  | lval'                                (A.VarExp(lval'))
+    lval                                 (A.VarExp(lval))
   | NIL                                  (A.NilExp)
   | INT                                  (A.IntExp(INT))
   | STRING                               (A.StringExp(STRING, STRINGleft))
@@ -135,7 +134,7 @@ exp:
   | LPAREN exp_seq RPAREN                (A.SeqExp(exp_seq))
   | ID LPAREN exps RPAREN                (A.CallExp({func=(Symbol.symbol ID), args=exps, pos=IDleft}))
   | ID LBRACE field_list RBRACE          (A.RecordExp({fields=field_list, typ=(Symbol.symbol ID), pos=IDleft})) 
-  | ID LBRACK exp RBRACK OF exp          (A.ArrayExp({typ=(Symbol.symbol ID), size=exp1, init=exp2, pos=IDleft}))
+  | array_init                           (array_init)
   | lval ASSIGN exp                      (A.AssignExp({var=lval, exp=exp, pos=ASSIGNleft}))
   | IF exp THEN exp ELSE exp             (A.IfExp({test=exp1, then'=exp2, else'=SOME(exp3), pos=IFleft}))
   | IF exp THEN exp %prec DO             (A.IfExp({test=exp1, then'=exp2, else'=NONE, pos=IFleft})) (* make lower precedence than a close ELSE statement *)

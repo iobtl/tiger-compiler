@@ -33,12 +33,6 @@ fun intToString s = let val SOME x = Int.fromString s in x end
 <INITIAL>nil      => (Tokens.NIL(yypos, yypos+3));
 <INITIAL>var  	  => (Tokens.VAR(yypos,yypos+3));
 
-\"[^\"]*\"     		 => (Tokens.STRING(yytext, yypos, yypos + size yytext));
-[a-zA-Z][a-zA-Z0-9_]* => (Tokens.ID(yytext, yypos, yypos + size yytext));
-[0-9]+	       		 => (Tokens.INT(intToString yytext, yypos, yypos + size yytext));
-\/\*.*\*\/     		 => (continue());
-[\ \t\b\f\r]+  		 => (continue());
-
 ","			   => (Tokens.COMMA(yypos,yypos+1));
 ":"			   => (Tokens.COLON(yypos, yypos+1));
 ";" 		   => (Tokens.SEMICOLON(yypos, yypos+1));
@@ -62,6 +56,12 @@ fun intToString s = let val SOME x = Int.fromString s in x end
 "&"			   => (Tokens.AND(yypos, yypos+1));
 "|"			   => (Tokens.OR(yypos, yypos+1));
 ":="           => (Tokens.ASSIGN(yypos, yypos+2));
+
+\"[^\"]*\"     		 => (Tokens.STRING(yytext, yypos, yypos + size yytext));
+[a-zA-Z][a-zA-Z0-9_]* => (Tokens.ID(yytext, yypos, yypos + size yytext));
+[0-9]+	       		 => (Tokens.INT(intToString yytext, yypos, yypos + size yytext));
+\/\*.*\*\/     		 => (continue());
+[\ \t\b\f\r]+  		 => (continue());
 
 .       	   => (ErrorMsg.error yypos ("illegal character " ^ yytext); continue());
 \n			   => (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
