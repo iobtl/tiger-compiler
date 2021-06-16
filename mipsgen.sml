@@ -183,9 +183,28 @@ struct
                          dst=[],
                          jump=SOME([t, f])}))
 
+        (** JUMP INSTRUCTIONS **)
+        (* j label: jump to target address *)
+        | munchStm (T.JUMP(T.NAME(name), labs)) =
+            emit(A.OPER({assem="j " ^ (Symbol.name name),
+                         src=[],
+                         dst=[],
+                         jump=SOME(labs)}))
+        (* jr $1: jump to address stored in $1 *)
+        | munchStm (T.JUMP(e1, labs)) =
+            emit(A.OPER({assem="jr 's0",
+                         src=[munchExp e1],
+                         dst=[],
+                         jump=SOME(labs)}))
+
+        | munchStm(T.EXP(T.CALL(T.NAME(lab), args))) =
+            emit(A.OPER({assem="jal ",
+                         src=[],
+                         dst=calldefs
+                         jump=SOME([lab])}))
+
         | munchStm (T.LABEL(lab)) =
             emit(A.LABEL({assem=(Symbol.name lab) ^ ":\n", lab=lab}))
-
       
       and result gen = let val t = Temp.newtemp() in gen t; t end
 
@@ -225,6 +244,7 @@ struct
                                         src=[munchExp e1, munchExp e2],
                                         dst=[r],
                                         jump=NONE})))
+
         (** LOGICAL INSTRUCTIONS **)
         (* and $1,$2,$3: bitwise AND *)
         | munchExp (T.BINOP(T.AND, e1, e2)) =
@@ -328,6 +348,54 @@ struct
                                         src=[munchExp e1, munchExp e2],
                                         dst=[r],
                                         jump=NONE})))
+
+        (** MEMORY ACCESS INSTRUCTIONS **)
+        | munchExp (T.MEM(e1)) =
+            result(fn r => emit(A.OPER({assem="lw 'd0,0('s0)\n",
+                                        src=[munchExp e1],
+                                        dst=[r],
+                                        jump=NONE})))
+        | munchExp (T.MEM(T.CONST(i))) =
+            result(fn r => emit(A.OPER({assem="lw 'd0," ^ int i ^ "($zero)\n",
+                                        src=[],
+                                        dst=[r],
+                                        jump=NONE})))
+        | munchExp (T.MEM(T.BINOP(T.PLUS, e1, T.CONST(i))))) =
+            result(fn r => emit(A.OPER({assem="lw 'd0," ^ int i ^ "\n",
+                                        src=[munchExp e1], 
+                                        dst=[r],
+                                        jump=NONE})))
+        | munchExp (T.MEM(T.BINOP(T.PLUS, T.CONST(i), e1)))) =
+            result(fn r => emit(A.OPER({assem="lw 'd0," ^ int i ^ "\n",
+                                        src=[munchExp e1], 
+                                        dst=[r],
+                                        jump=NONE})))
+        | munchExp (T.MEM(T.BINOP(T.MINUS, e1, T.CONST(i))))) =
+            result(fn r => emit(A.OPER({assem="lw 'd0,-" ^ int i ^ "\n",
+                                        src=[munchExp e1], 
+                                        dst=[r],
+                                        jump=NONE})))
+        | munchExp (T.MEM(T.BINOP(T.MINUS, T.CONST(i), e1)))) =
+            result(fn r => emit(A.OPER({assem="lw 'd0,-" ^ int i ^ "\n",
+                                        src=[munchExp e1], 
+                                        dst=[r],
+                                        jump=NONE})))
+
+        | munchExp (T.TEMP(t)) = t
+
+        | munchExp (T.CONST(i)) =
+            result(fn r => emit(A.OPER({assem="li 'd0," ^ int i ^ "\n",
+                                        src=[],
+                                        dst=[r],
+                                        jump=NONE})))
+
+        | munchExp (T.NAME(lab)) =
+            result (fn r => emit(A.OPER({assem="la 'd0," ^ (Symbol.name lab),
+                                         src=[],
+                                         dst=[r],
+                                         jump=NONE})))
+      and munchArgs (idx, args) =
+
     in
       munchStm stm; rev(!ilist)
     end
