@@ -11,6 +11,7 @@ struct
   fun codegen frame (stm: Tree.stm) : A.instr list =
     let
       val ilist = ref (nil: A.instr list)
+      val calldefs = [RA, RV]@F.argregs
       fun emit x = ilist := x::(!ilist)
       fun int i = if i < 0 then Integer.toString(~i) else Integer.toString(i)
 
@@ -197,27 +198,52 @@ struct
                          dst=[],
                          jump=SOME(labs)}))
 
+        (* jal label: procedure call *)
+        (* TODO: need to preserve caller-saved registers *)
         | munchStm(T.EXP(T.CALL(T.NAME(lab), args))) =
-            emit(A.OPER({assem="jal ",
-                         src=[],
-                         dst=calldefs
-                         jump=SOME([lab])}))
+            let
+              val temp_store = List.map (fn reg => (Temp.newtemp(), reg)) F.argregs
+              val temp_save_instr = List.map (fn (dst, src) => T.MOVE(T.TEMP(dst), T.TEMP(src)))
+                                    temp_store
+              val temp_rest_instr = List.map (fn (src, dst) => T.MOVE(T.TEMP(dst), T.TEMP(src)))
+                                    temp_store
+            in
+              List.map munchStm temp_store_instr;
+              emit(A.OPER({assem="jal " ^ (Symbol.name lab),
+                          src=munchArgs(0, args),
+                          dst=calldefs
+                          jump=SOME([lab])}));
+              List.map munchStm temp_rest_instr
+            end
 
         | munchStm (T.LABEL(lab)) =
             emit(A.LABEL({assem=(Symbol.name lab) ^ ":\n", lab=lab}))
-      
+
+      (* special munch: generates instruction to move all arguments in procedure call
+      to their respective argument registers *)
+      and munchArgs (idx, args) =
+            let
+              fun move_to_reg (idx, arg) =
+                let
+                  val reg = List.nth(F.argregs, idx)
+                  val exp = munchExp arg
+                in
+                  munchStm(T.MOVE(T.TEMP(reg), T.TEMP(exp)));
+                  reg
+                end
+               
+              val ints = List.tabulate(List.length args, fn x => x + idx)
+              val lp = ListPair.zip ints args
+            in
+              List.foldr (fn ((idx, arg), acc) => move_to_reg(idx, arg)::acc) [] lp
+            end
+
       and result gen = let val t = Temp.newtemp() in gen t; t end
 
         (** ARITHMETIC INSTRUCTIONS **)
         (* add $1,$2,$3 *)
       and munchExp (T.BINOP(T.PLUS, e1, e2)) =
             result(fn r => emit(A.OPER({assem="add 'd0,'s0,'s1\n",
-                                        src=[munchExp e1, munchExp e2],
-                                        dst=[r],
-                                        jump=NONE})))
-        (* sub $1,$2,$3 *)
-        | munchExp (T.BINOP(T.MINUS, e1, e2)) =
-            result(fn r => emit(A.OPER({assem="sub 'd0,'s0,'s1\n",
                                         src=[munchExp e1, munchExp e2],
                                         dst=[r],
                                         jump=NONE})))
@@ -229,6 +255,18 @@ struct
                                         jump=NONE})))
         | munchExp (T.BINOP(T.PLUS, T.CONST(i), e1)) =
             result(fn r => emit(A.OPER({assem="addi 'd0,'s0," ^ int i ^ "\n",
+                                        src=[munchExp e1],
+                                        dst=[r],
+                                        jump=NONE})))
+        (* sub $1,$2,$3 *)
+        | munchExp (T.BINOP(T.MINUS, e1, e2)) =
+            result(fn r => emit(A.OPER({assem="sub 'd0,'s0,'s1\n",
+                                        src=[munchExp e1, munchExp e2],
+                                        dst=[r],
+                                        jump=NONE})))
+        (* sub $1,$2,c *)
+        | munchExp (T.BINOP(T.MINUS, e1, T.CONST(i))) =
+            result(fn r => emit(A.OPER({assem="addi 'd0,'s0,-" ^ int i ^ "\n",
                                         src=[munchExp e1],
                                         dst=[r],
                                         jump=NONE})))
@@ -375,11 +413,23 @@ struct
                                         src=[munchExp e1], 
                                         dst=[r],
                                         jump=NONE})))
-        | munchExp (T.MEM(T.BINOP(T.MINUS, T.CONST(i), e1)))) =
-            result(fn r => emit(A.OPER({assem="lw 'd0,-" ^ int i ^ "\n",
-                                        src=[munchExp e1], 
-                                        dst=[r],
-                                        jump=NONE})))
+
+        | munchExp(T.CALL(T.NAME(lab), args)) =
+            let
+              val temp_store = List.map (fn reg => (Temp.newtemp(), reg)) F.argregs
+              val temp_save_instr = List.map (fn (dst, src) => T.MOVE(T.TEMP(dst), T.TEMP(src)))
+                                    temp_store
+              val temp_rest_instr = List.map (fn (src, dst) => T.MOVE(T.TEMP(dst), T.TEMP(src)))
+                                    temp_store
+            in
+              List.map munchStm temp_store_instr;
+              result(fn r => emit(A.OPER({assem="jal " ^ (Symbol.name lab),
+                                         src=munchArgs(0, args),
+                                         dst=calldefs
+                                         jump=SOME([lab])})));
+              List.map munchStm temp_rest_instr;
+              F.RV
+            end
 
         | munchExp (T.TEMP(t)) = t
 
@@ -394,8 +444,6 @@ struct
                                          src=[],
                                          dst=[r],
                                          jump=NONE})))
-      and munchArgs (idx, args) =
-
     in
       munchStm stm; rev(!ilist)
     end

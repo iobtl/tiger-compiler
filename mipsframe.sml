@@ -11,9 +11,65 @@ struct
   datatype frag = PROC of {body: Tree.stm, frame: frame}
                 | STRING of Temp.label * string
 
+  type register = string
+
+  (** Special Registers **)
+
+  (* zero register *)
+  val ZERO = Temp.newtemp()
+
+  (* reserved for pseudo-instructions *)
+  val at = Temp.newtemp()
+
+  (* return values from functions *)
+  val v0 = Temp.newtemp()
+  val v1 = Temp.newtemp()
+
+  (* (caller-saved) arguments to functions - not preserved by subprograms *)
+  val a0 = Temp.newtemp()
+  val a1 = Temp.newtemp()
+  val a2 = Temp.newtemp()
+  val a3 = Temp.newtemp()
+
+  (* temporary data - not preserved by subprograms *)
+  val t0 = Temp.newtemp()
+  val t1 = Temp.newtemp()
+  val t2 = Temp.newtemp()
+  val t3 = Temp.newtemp()
+  val t4 = Temp.newtemp()
+  val t5 = Temp.newtemp()
+  val t6 = Temp.newtemp()
+  val t7 = Temp.newtemp()
+
+  (* (callee-saved) saved registers - preserved by subprograms *)
+  val s0 = Temp.newtemp()
+  val s1 = Temp.newtemp()
+  val s2 = Temp.newtemp()
+  val s3 = Temp.newtemp()
+  val s4 = Temp.newtemp()
+  val s5 = Temp.newtemp()
+  val s6 = Temp.newtemp()
+  val s7 = Temp.newtemp()
+
+  (* temporary registers - not preserved by subprograms *)
+  val t8 = Temp.newtemp()
+  val t9 = Temp.newtemp()
+
+  (* designated pointers/address values *)
+  val GP = Temp.newtemp()
+  val SP = Temp.newtemp()
   val FP = Temp.newtemp()
+  val RA = Temp.newtemp()
   val RV = Temp.newtemp()
+
+  val specialregs = [GP, SP, FP, RA, RV, ZERO]
+  val argregs = [a0, a1, a2, a3]
+  val calleesaves = [s0, s1, s2, s3, s4, s5, s6, s7]
+  val tempregs = [t0, t1, t2, t3, t4, t5, t6, t7, t8, t9]
+
   val wordSize = 4
+
+  val tempMap = Temp.Table.table.empty
 
   fun newFrame {name, formals} =
     let
