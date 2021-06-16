@@ -16,6 +16,7 @@ struct
 
       fun munchStm (T.SEQ(a, b)) = (munchStm a; munchStm b);
 
+        (** DATA MOVEMENT INSTRUCTIONS **)
         (* sw $1,c($2): copy from register to memory *)
         | munchStm (T.MOVE(T.MEM(T.BINOP(T.PLUS, e1, T.CONST(i))), e2)) =
             emit(A.OPER({assem="sw 's1," ^ int i ^ "('s0)\n" 
@@ -79,10 +80,112 @@ struct
 
         (* move $1,$2: copy from register to register *)
         | munchStm (T.MOVE(T.TEMP(i), e1)) =
-            emit(A.OPER({assem="move 'd0,'s0\n",
+            emit(A.MOVE({assem="move 'd0,'s0\n",
                          src=[munchExp e1],
                          dst=[i],
                          jump=NONE}))
+
+        (** BRANCH INSTRUCTIONS **)
+        (* beq $1,$2,label: test if registers are equal *)
+        | munchStm (T.CJUMP(T.EQ, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="beq 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* beqz $1,label: test if register is equal to zero *)
+        | munchStm (T.CJUMP(T.EQ, e1, T.CONST(0), T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="beqz 's0," ^ (Symbol.name t),
+                         src=[munchExp e1],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bne $1,$2,label: test if registers are not equal *)
+        | munchStm (T.CJUMP(T.NE, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bne 's0,'s1," ^ (Symbol.name t),
+                         PSsrc=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bnez $1, label: test if register is not equal to zero *)
+        | munchStm (T.CJUMP(T.NE, e1, T.CONST(0), T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bnez 's0," ^ (Symbol.name t),
+                         PSsrc=[munchExp e1],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bgt $1,$2,label: test if one register is greater than another register *)
+        | munchStm (T.CJUMP(T.GT, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bgt 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bgtz $1,label: test if one register is greater than zero *)
+        | munchStm (T.CJUMP(T.GT, e1, T.CONST(0), T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bgtz 's0," ^ (Symbol.name t),
+                         src=[munchExp e1],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bgtu $1,$2,label: (unsigned) test if one register is greater than another register *)
+        | munchStm (T.CJUMP(T.UGT, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bgtu 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bge $1,$2,label: test if one register is greater or equal to another register *)
+        | munchStm (T.CJUMP(T.GE, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bge 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bgez $1,label: test if one register is greater or equal to zero *)
+        | munchStm (T.CJUMP(T.GE, e1, T.CONST(0), T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bgez 's0," ^ (Symbol.name t),
+                         src=[munchExp e1],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bgeu $1,$2,label: (unsigned) test if one register is greater or equal to another register *)
+        | munchStm (T.CJUMP(T.UGE, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bgeu 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* blt $1,$2,label: test if one register is less than another register *)
+        | munchStm (T.CJUMP(T.LT, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="blt 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bltz $1,label: test if one register is less than zero *)
+        | munchStm (T.CJUMP(T.LT, e1, T.CONST(0), T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="blt 's0," ^ (Symbol.name t),
+                         src=[munchExp e1],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bltu $1,$2,label: (unsigned) test if one register is less than another register *)
+        | munchStm (T.CJUMP(T.ULT, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bltu 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* ble $1,$2,label: test if one register is less or equal to another register *)
+        | munchStm (T.CJUMP(T.LE, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="ble 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* blez $1,label: test if one register is less or equal to zero *)
+        | munchStm (T.CJUMP(T.LE, e1, T.CONST(0), T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="blez 's0," ^ (Symbol.name t),
+                         src=[munchExp e1],
+                         dst=[],
+                         jump=SOME([t, f])}))
+        (* bleu $1,$2,label: (unsigned) test if one register is less or equal to another register *)
+        | munchStm (T.CJUMP(T.ULE, e1, e2, T.LABEL(t), T.LABEL(f))) =
+            emit(A.OPER({assem="bleu 's0,'s1," ^ (Symbol.name t),
+                         src=[munchExp e1, munchExp e2],
+                         dst=[],
+                         jump=SOME([t, f])}))
+
+        | munchStm (T.LABEL(lab)) =
+            emit(A.LABEL({assem=(Symbol.name lab) ^ ":\n", lab=lab}))
+
       
       and result gen = let val t = Temp.newtemp() in gen t; t end
 
