@@ -71,12 +71,37 @@ struct
   val wordSize = 4
 
   val temp_mapping = 
-    [(GP, "gp"),
-     (SP, "sp"),
-     (FP, "fp"),
-     (RA, "ra"),
-     (RV, "rv"),
-     (ZERO, "zero")]
+    [(GP, "$gp"),
+     (SP, "$sp"),
+     (FP, "$fp"),
+     (RA, "$ra"),
+     (RV, "$rv"),
+     (ZERO, "$zero"),
+     (at, "$at"),
+     (v0, "$v0"),
+     (v1, "$v1"),
+     (a0, "$a0"),
+     (a1, "$a1"),
+     (a2, "$a2"),
+     (a3, "$a3"),
+     (t0, "$t0"),
+     (t1, "$t1"),
+     (t2, "$t2"),
+     (t3, "$t3"),
+     (t4, "$t4"),
+     (t5, "$t5"),
+     (t6, "$t6"),
+     (t7, "$t7"),
+     (t8, "$t8"),
+     (t9, "$t9"),
+     (s0, "$s0"),
+     (s1, "$s1"),
+     (s2, "$s2"),
+     (s3, "$s3"),
+     (s4, "$s4"),
+     (s5, "$s5"),
+     (s6, "$s6"),
+     (s7, "$s7")]
 
   val tempMap = List.foldl (fn ((reg, name), tab) => Temp.Table.enter(tab, reg, name)) 
                 Temp.Table.empty temp_mapping

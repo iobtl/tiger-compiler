@@ -52,7 +52,7 @@ struct
       val outer_level = T.newLevel {parent=T.outermost, 
                                     name=Temp.namedlabel "main", 
                                     formals=[]}
-      val {exp, ty} = transExp(E.base_venv, E.base_tenv, outer_level, Temp.newlabel()) abExp
+      val {exp, ty=_} = transExp(E.base_venv, E.base_tenv, outer_level, Temp.newlabel()) abExp
     in
       (T.procEntryExit(outer_level, exp); T.getResult())
     end
