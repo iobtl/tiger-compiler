@@ -1,6 +1,7 @@
 structure MipsFrame : FRAME =
 struct
   structure T = Tree
+  structure A = Assem
 
   datatype access = InFrame of int
                   | InReg of Temp.temp
@@ -69,7 +70,16 @@ struct
 
   val wordSize = 4
 
-  val tempMap = Temp.Table.table.empty
+  val temp_mapping = 
+    [(GP, "gp"),
+     (SP, "sp"),
+     (FP, "fp"),
+     (RA, "ra"),
+     (RV, "rv"),
+     (ZERO, "zero")]
+
+  val tempMap = List.foldl (fn ((reg, name), tab) => Temp.Table.enter(tab, reg, name)) 
+                Temp.Table.empty temp_mapping
 
   fun newFrame {name, formals} =
     let
@@ -85,7 +95,7 @@ struct
        locals=(ref 0), name=name}
     end
 
-  fun name (frame : frame) = #name frame
+  fun name (frame : frame) = Symbol.name (#name frame)
   fun formals (frame : frame) = #formals frame
   fun allocLocal (frame : frame) esc =
     let
@@ -103,6 +113,15 @@ struct
   fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel(s)), args)
 
+  fun string (label, str) =
+    (Symbol.name label) ^  ": .asciiz \"" ^ str ^ "\"\n"
+
   (* view shift *)
   fun procEntryExit1 (frame, body) = body
+  fun procEntryExit2 (frame, body) =
+    body @
+    [A.OPER({assem="",
+             src=[ZERO, RA, SP]@calleesaves,
+             dst=[],
+             jump=SOME([])})]
 end

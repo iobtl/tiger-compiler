@@ -52,9 +52,9 @@ struct
       val outer_level = T.newLevel {parent=T.outermost, 
                                     name=Temp.namedlabel "main", 
                                     formals=[]}
-      val translator = transExp(E.base_venv, E.base_tenv, outer_level, Temp.newlabel())
+      val {exp, ty} = transExp(E.base_venv, E.base_tenv, outer_level, Temp.newlabel()) abExp
     in
-      (translator abExp; T.getResult())
+      (T.procEntryExit(outer_level, exp); T.getResult())
     end
 
   and transExp(venv, tenv, level, break) =
@@ -336,7 +336,7 @@ struct
                                 venv' params'
                     val {exp, ty} = transExp(venv'', tenv, level, break) body
                   in
-                    T.procEntryExit({level=level, body=exp}); 
+                    T.procEntryExit(level, exp); 
                     {venv=venv', tenv=tenv, exps=[]}
                   end
               in

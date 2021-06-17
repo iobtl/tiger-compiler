@@ -79,6 +79,7 @@ struct
             in
               (List.map process_func fundecs; env)
             end
+        | A.TypeDec(tydecs) => env
     in
       List.foldl process_dec env s
     end

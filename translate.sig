@@ -35,7 +35,7 @@ sig
   val letExp : exp list * exp -> exp
   val arrayExp : exp * exp -> exp
 
-  val procEntryExit : {level: level, body: exp} -> unit
+  val procEntryExit : level * exp -> unit
 
   structure F : FRAME
   val getResult : unit -> frag list

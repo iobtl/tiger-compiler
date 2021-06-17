@@ -308,7 +308,7 @@ struct
   fun arrayExp (size, init) =
     Ex(F.externalCall("initArray", [unEx size, unEx init]))
 
-  fun procEntryExit ({level=Level({parent, frame}, _), body}) =
+  fun procEntryExit (Level({parent, frame}, _), body) =
     let
       val ret = F.procEntryExit1(frame, T.MOVE(T.TEMP(F.RV), unEx body))
     in

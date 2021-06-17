@@ -24,6 +24,9 @@ tiger.grm
 findescape.sml
 tree.sml
 printtree.sml
+canon.sml
+assem.sml
+mipsgen.sml
 $/smlnj-lib.cm
 $/basis.cm
 $/ml-yacc-lib.cm
