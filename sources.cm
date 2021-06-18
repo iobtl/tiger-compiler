@@ -27,6 +27,10 @@ printtree.sml
 canon.sml
 assem.sml
 mipsgen.sml
+graph.sml
+graph.sig
+makegraph.sml
+flowgraph.sml
 $/smlnj-lib.cm
 $/basis.cm
 $/ml-yacc-lib.cm
