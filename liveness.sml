@@ -162,9 +162,9 @@ struct
         let
           val adj_nodes = Graph.adj node
         in
-          (print ((Graph.nodename node) ^ " has adjacent nodes: \n");
-          List.app (fn n => print ((Graph.nodename n) ^ "\n")) adj_nodes;
-          print "----------")
+          (TextIO.output(out, ((Graph.nodename node) ^ " has adjacent nodes: \n"));
+          List.app (fn n => TextIO.output(out, ((Graph.nodename n) ^ "\n"))) adj_nodes;
+          TextIO.output(out, "----------"))
         end
     in
       List.app print_adj (Graph.nodes graph)
