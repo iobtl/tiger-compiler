@@ -15,7 +15,7 @@ struct
   type liveSet = Set.set
   type liveMap = liveSet Flow.Graph.Table.table
 
-  fun set l = Set.addList(S.empty, l)
+  fun set l = Set.addList(Set.empty, l)
 
   fun list_unwrap (tab, n) =
     case Graph.Table.look(tab, n) of
@@ -27,10 +27,11 @@ struct
       SOME(s) => s
     | NONE => Set.empty
 
-  fun interferenceGraph Flow.FGRAPH({control, def, use, ismove}) =
+  fun interferenceGraph (Flow.FGRAPH({control, def, use, ismove})) =
     let
       val nodes = Graph.nodes control
       val ig = Graph.newGraph()
+      val movelist: (Graph.node * Graph.node) list ref = ref []
       val init_lin = List.foldl (fn (n, tab) => Graph.Table.enter(tab, n, Set.empty))
                                  Graph.Table.empty nodes
       val init_lout = List.foldl (fn (n, tab) => Graph.Table.enter(tab, n, Set.empty))
@@ -40,14 +41,14 @@ struct
       fun init_graph_temps nodes =
         let
           fun accumulate_temps (node, temps) =
-            S.addList(S.addList(temps, 
-                                Graph.Table.look(def, node)), 
-                      Graph.Table.look(use, node))
+            Set.addList(Set.addList(temps, list_unwrap(def, node)), 
+                        list_unwrap(use, node))
         in
-          List.foldl accumulate_temps Set.empty nodes
+          Set.listItems (List.foldl accumulate_temps Set.empty nodes)
         end
 
-      (* initializes nodes for interference graph; returns tnode and gtemp mappings *)
+      (* initializes nodes for interference graph; graph contains temporaries as nodes 
+      and interferences as edges; returns tnode and gtemp mappings *)
       fun init_interf_mappings temps =
         let
           val init_tnode: Graph.node Temp.Table.table = Temp.Table.empty
@@ -88,7 +89,7 @@ struct
             in[n] <- use[n] union (out[n]\def[n])
             out[n] <- Union(for all s in succ[n]) in[s]
          until in'[n] = in[n] and out'[n] = out[n] for all n *)
-      fun iter_liveness (live_in: liveMap, live_out: liveMap) =
+      fun iter_liveness (live_in: liveMap, live_out: liveMap): liveMap * liveMap =
         let
           val set_updated = ref false
           fun update_live_sets (node: Graph.node, (lin: liveMap, lout: liveMap)) =
@@ -100,13 +101,13 @@ struct
 
               val new_lin = Set.union(node_use, Set.difference(lout_set, node_def))
               val new_lout = List.foldl (fn (n, s) => Set.union(set_unwrap(lin, n), s))
-                                         Set.empty (Graph.succ nodes)
+                                         Set.empty (Graph.succ node)
             in
               if Set.equal(lin_set, new_lin) andalso Set.equal(lout_set, new_lout)
               then (lin, lout)
               else (set_updated := true;
-                    Graph.Table.enter(lin, node, new_lin); 
-                    Graph.Table.enter(lout, node, new_lout))
+                    (Graph.Table.enter(lin, node, new_lin),
+                    Graph.Table.enter(lout, node, new_lout)))
             end
 
           val (final_in, final_out) = List.foldl update_live_sets (live_in, live_out) (List.rev nodes)
@@ -116,12 +117,40 @@ struct
           else (final_in, final_out)
         end
 
-      fun add_interf_edges (node, )
-
       val (live_in, live_out) = iter_liveness(init_lin, init_lout)
+
+      (* adding interference edges *)
+      fun add_interf_edges node =
+        let
+          fun add_nonmove (from, to) = Graph.mk_edge({from=from, to=to})
+          fun add_move (from, to) = (movelist := (from, to)::(!movelist);
+                                    if not (Graph.eq(from, to)) 
+                                    then Graph.mk_edge({from=from, to=to})
+                                    else ())
+
+          val node_def = list_unwrap(def, node)
+          val node_lout = Set.listItems (set_unwrap(live_out, node))
+          val SOME(node_ismove) = Graph.Table.look(ismove, node)
+        in
+          if node_ismove
+          then List.app (fn defn => 
+                          (List.app (fn outn => add_nonmove(tnode_mapping defn, tnode_mapping outn))
+                                     node_lout)) 
+                        node_def
+          else List.app (fn defn =>
+                          (List.app (fn outn => add_move(tnode_mapping defn, tnode_mapping outn))
+                                     node_lout))
+                        node_def
+        end
     in
-      body
+      List.app add_interf_edges nodes;
+      (IGRAPH({graph=ig, 
+               tnode=tnode_mapping, 
+               gtemp=gtemp_mapping, 
+               moves=(!movelist)}),
+      fn n => Set.listItems (set_unwrap(live_out, n)))
     end
+
 
   (* for debugging; prints out list of nodes in igraph, and for each node, a list
   of nodes adjacent to it *)
@@ -129,16 +158,15 @@ struct
     let
       val IGRAPH({graph, tnode, gtemp, moves}) = ig
 
-      fun get_adj node = (node, Graph.adj node)
       fun print_adj node =
         let
-          val adj_nodes = get_adj node
+          val adj_nodes = Graph.adj node
         in
-          (print (Graph.nodename node) ^ " has adjacent nodes: \n";
-          List.map (fn n => print (Graph.nodename n) ^ "\n") adj_nodes;
+          (print ((Graph.nodename node) ^ " has adjacent nodes: \n");
+          List.app (fn n => print ((Graph.nodename n) ^ "\n")) adj_nodes;
           print "----------")
         end
     in
-      List.map print_adj (Graph.nodes graph)
+      List.app print_adj (Graph.nodes graph)
     end
 end

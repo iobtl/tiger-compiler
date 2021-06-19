@@ -32,6 +32,7 @@ graph.sig
 makegraph.sml
 flowgraph.sml
 liveness.sml
+liveness.sig
 $/smlnj-lib.cm
 $/basis.cm
 $/ml-yacc-lib.cm
