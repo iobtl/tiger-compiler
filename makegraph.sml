@@ -8,6 +8,7 @@ struct
   structure A = Assem
   datatype temp_node = TEMPNODE of {node: Graph.node, instruct: Assem.instr}
 
+  (* constructs a control-flow graph from a sequence of instructions *)
   fun instrs2graph instructs =
     let
       val g = Graph.newGraph()
@@ -26,6 +27,7 @@ struct
           let
             val node = Graph.newNode(control)
           in
+            (* reference previous nodes created for jump targets *)
             (case jump of
               NONE => ()
             | SOME(labs) => 

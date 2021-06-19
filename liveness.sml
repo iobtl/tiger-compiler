@@ -4,13 +4,121 @@ struct
                                tnode: (Temp.temp -> Graph.node),
                                gtemp: (Graph.node -> Temp.temp),
                                moves: (Graph.node * Graph.node) list}
-  type liveSet = unit Temp.Table.table * temp list
+
+
+  structure Set = RedBlackSetFn(
+    struct
+      type ord_key = Temp.temp
+      fun compare(a, b) = String.compare(Temp.makestring a, Temp.makestring b)
+    end)
+
+  type liveSet = Set.set
   type liveMap = liveSet Flow.Graph.Table.table
 
+  fun set l = Set.addList(S.empty, l)
+
+  fun list_unwrap (tab, n) =
+    case Graph.Table.look(tab, n) of
+      SOME(ls) => ls
+    | NONE => []
+
+  fun set_unwrap (tab, n) =
+    case Graph.Table.look(tab, n) of
+      SOME(s) => s
+    | NONE => Set.empty
 
   fun interferenceGraph Flow.FGRAPH({control, def, use, ismove}) =
     let
-      
+      val nodes = Graph.nodes control
+      val ig = Graph.newGraph()
+      val init_lin = List.foldl (fn (n, tab) => Graph.Table.enter(tab, n, Set.empty))
+                                 Graph.Table.empty nodes
+      val init_lout = List.foldl (fn (n, tab) => Graph.Table.enter(tab, n, Set.empty))
+                                  Graph.Table.empty nodes
+
+      (* gets all temporaries in the original control-flow graph *)
+      fun init_graph_temps nodes =
+        let
+          fun accumulate_temps (node, temps) =
+            S.addList(S.addList(temps, 
+                                Graph.Table.look(def, node)), 
+                      Graph.Table.look(use, node))
+        in
+          List.foldl accumulate_temps Set.empty nodes
+        end
+
+      (* initializes nodes for interference graph; returns tnode and gtemp mappings *)
+      fun init_interf_mappings temps =
+        let
+          val init_tnode: Graph.node Temp.Table.table = Temp.Table.empty
+          val init_gtemp: Temp.temp Graph.Table.table = Graph.Table.empty
+          
+          fun iter_temp (tnode, gtemp, t::ts) =
+            (case Temp.Table.look(tnode, t) of
+              SOME(node) => iter_temp(tnode, gtemp, ts) (* mapping already exists *)
+            | NONE =>
+                let
+                  val new_node = Graph.newNode(ig)
+                  val tnode' = Temp.Table.enter(tnode, t, new_node)
+                  val gtemp' = Graph.Table.enter(gtemp, new_node, t)
+                in
+                  iter_temp(tnode', gtemp', ts)
+                end)
+            | iter_temp (tnode, gtemp, []) = (tnode, gtemp)
+        in
+          iter_temp(init_tnode, init_gtemp, temps)
+        end
+
+      fun tnode_map tab temp = 
+        case Temp.Table.look(tab, temp) of
+          SOME(n) => n
+
+      fun gtemp_map tab node =
+        case Graph.Table.look(tab, node) of 
+          SOME(t) => t
+
+      val (tnode, gtemp) = init_interf_mappings (init_graph_temps nodes)
+      val tnode_mapping = tnode_map tnode
+      val gtemp_mapping = gtemp_map gtemp
+
+      (* iterative solution for dataflow equations *)
+      (* repeat
+          for each n
+            in'[n] <- in[n]; out'[n] <- out[n]
+            in[n] <- use[n] union (out[n]\def[n])
+            out[n] <- Union(for all s in succ[n]) in[s]
+         until in'[n] = in[n] and out'[n] = out[n] for all n *)
+      fun iter_liveness (live_in: liveMap, live_out: liveMap) =
+        let
+          val set_updated = ref false
+          fun update_live_sets (node: Graph.node, (lin: liveMap, lout: liveMap)) =
+            let
+              val lin_set = set_unwrap(lin, node)
+              val lout_set = set_unwrap(lout, node)
+              val node_def = set(list_unwrap(def, node))
+              val node_use = set(list_unwrap(use, node))
+
+              val new_lin = Set.union(node_use, Set.difference(lout_set, node_def))
+              val new_lout = List.foldl (fn (n, s) => Set.union(set_unwrap(lin, n), s))
+                                         Set.empty (Graph.succ nodes)
+            in
+              if Set.equal(lin_set, new_lin) andalso Set.equal(lout_set, new_lout)
+              then (lin, lout)
+              else (set_updated := true;
+                    Graph.Table.enter(lin, node, new_lin); 
+                    Graph.Table.enter(lout, node, new_lout))
+            end
+
+          val (final_in, final_out) = List.foldl update_live_sets (live_in, live_out) (List.rev nodes)
+        in
+          if !set_updated
+          then iter_liveness(final_in, final_out)
+          else (final_in, final_out)
+        end
+
+      fun add_interf_edges (node, )
+
+      val (live_in, live_out) = iter_liveness(init_lin, init_lout)
     in
       body
     end
