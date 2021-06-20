@@ -37,9 +37,9 @@ struct
                           end)
                           labs);
             {control=control,
-            def=Graph.Table.enter(def, node, dst),
-            use=Graph.Table.enter(use, node, src),
-            ismove=Graph.Table.enter(ismove, node, false)}
+             def=Graph.Table.enter(def, node, dst),
+             use=Graph.Table.enter(use, node, src),
+             ismove=Graph.Table.enter(ismove, node, false)}
           end
 
         | parse_instruct (A.LABEL({assem, lab}), {control, def, use, ismove}) =

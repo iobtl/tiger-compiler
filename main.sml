@@ -15,8 +15,11 @@ struct
       val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
       val instrs = List.concat(map (MipsGen.codegen frame) stms') 
       val format0 = Assem.format(Temp.makestring)
+      val (fgraph, fgraphnodes) = MakeGraph.instrs2graph instrs
+      val (igraph, node_liveout_map) = Liveness.interferenceGraph fgraph
     in  
       app (fn i => TextIO.output(out,format0 i)) instrs
+
     end
     | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))
   

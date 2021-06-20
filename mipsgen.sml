@@ -199,8 +199,8 @@ struct
                          dst=[],
                          jump=SOME(labs)}))
 
-        (* jal label: procedure call *)
-        | munchStm(T.EXP(T.CALL(T.NAME(lab), args))) =
+        (* jalr label: procedure call *)
+        | munchStm(T.EXP(T.CALL(labexp, args))) =
             let
               val temp_store = List.map (fn reg => (Temp.newtemp(), reg)) F.argregs
               val temp_save_instr = List.map (fn (dst, src) => T.MOVE(T.TEMP(dst), T.TEMP(src)))
@@ -209,10 +209,10 @@ struct
                                     temp_store
             in
               List.map munchStm temp_save_instr;
-              emit(A.OPER({assem="jal " ^ (Symbol.name lab) ^ "\n",
-                          src=munchArgs(0, args),
+              emit(A.OPER({assem="jalr `s0\n",
+                          src=munchExp(labexp)::munchArgs(0, args),
                           dst=calldefs,
-                          jump=SOME([lab])}));
+                          jump=NONE}));
               List.map munchStm temp_rest_instr;
               ()
             end
@@ -416,7 +416,7 @@ struct
                                         dst=[r],
                                         jump=NONE})))
 
-        | munchExp(T.CALL(T.NAME(lab), args)) =
+        | munchExp(T.CALL(labexp, args)) =
             let
               val temp_store = List.map (fn reg => (Temp.newtemp(), reg)) F.argregs
               val temp_save_instr = List.map (fn (dst, src) => T.MOVE(T.TEMP(dst), T.TEMP(src)))
@@ -425,10 +425,10 @@ struct
                                     temp_store
             in
               List.map munchStm temp_save_instr;
-              result(fn r => emit(A.OPER({assem="jal " ^ (Symbol.name lab),
-                                         src=munchArgs(0, args),
+              result(fn r => emit(A.OPER({assem="jalr `s0\n",
+                                         src=munchExp(labexp)::munchArgs(0, args),
                                          dst=calldefs,
-                                         jump=SOME([lab])})));
+                                         jump=NONE})));
               List.map munchStm temp_rest_instr;
               F.RV
             end
@@ -442,7 +442,7 @@ struct
                                         jump=NONE})))
 
         | munchExp (T.NAME(lab)) =
-            result (fn r => emit(A.OPER({assem="la `d0," ^ (Symbol.name lab),
+            result (fn r => emit(A.OPER({assem="la `d0," ^ (Symbol.name lab) ^ "\n",
                                          src=[],
                                          dst=[r],
                                          jump=NONE})))

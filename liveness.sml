@@ -122,15 +122,21 @@ struct
       (* adding interference edges *)
       fun add_interf_edges node =
         let
+          val node_def = list_unwrap(def, node)
+          val node_lout = Set.listItems (set_unwrap(live_out, node))
+          val node_ismove = case Graph.Table.look(ismove, node) of
+            NONE => false
+          | SOME(t) => t
+
+          (* 1. For nonmove instructions that define a variable _a_, with live-out variables
+             b1, ..., bn, add interference edges (a, b1), ... 
+             2. For move instructions a <- c, with live-out variables b1, ..., bn, add
+             interference edges (a, b1), ... for any b that is not c*)
           fun add_nonmove (from, to) = Graph.mk_edge({from=from, to=to})
           fun add_move (from, to) = (movelist := (from, to)::(!movelist);
                                     if not (Graph.eq(from, to)) 
                                     then Graph.mk_edge({from=from, to=to})
                                     else ())
-
-          val node_def = list_unwrap(def, node)
-          val node_lout = Set.listItems (set_unwrap(live_out, node))
-          val SOME(node_ismove) = Graph.Table.look(ismove, node)
         in
           if node_ismove
           then List.app (fn defn => 
