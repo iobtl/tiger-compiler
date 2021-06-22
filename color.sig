@@ -1,15 +1,12 @@
-structure COLOR =
-struct
-  structure F = MipsFrame : FRAME
+signature COLOR =
+sig
+  structure F : FRAME
 
-  type allocation = Frame.register Temp.Table.table
+  type allocation = MipsFrame.register Temp.Table.table
 
   val color : {interference: Liveness.igraph,
                initial: allocation,
                spillCost: Graph.node -> int,
-               registers: Frame.register list}
+               registers: MipsFrame.register list}
                 -> allocation * Temp.temp list
-
-  fun color ({interference, initial, spillCost, registers}) =
-
 end
