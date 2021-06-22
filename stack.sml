@@ -10,5 +10,7 @@ struct
       x::t => (t, x)
     | [] => raise Empty "empty stack"
 
+  fun members s = s
+
   val isEmpty = List.null
 end

@@ -12,15 +12,10 @@ struct
 
   fun set l = Set.addList(Set.empty, l)
 
-  fun list_unwrap (tab, n) =
-    case Graph.Table.look(tab, n) of
-      SOME(ls) => ls
-    | NONE => []
-
-  fun set_unwrap (tab, n) =
-    case Graph.Table.look(tab, n) of
-      SOME(s) => s
-    | NONE => Set.empty
+  fun unwrap (tab: 'a Graph.Table.table, e: Graph.node) =
+    case Graph.Table.look(tab, e) of
+      NONE => print "no value found in table"
+    | SOME(s) => s
 
   type allocation = Frame.register Temp.Table.table
 
@@ -43,7 +38,7 @@ struct
 
   fun color ({interference, initial, spillCost, registers}) =
     let
-      val K = List.length registers
+      val K = List.length registers (* TODO: map K integers to colors for easier interfacing? *)
       val Liveness.IGRAPH({graph, tnode, gtemp, moves}) = interference
 
       nodeDegree := (List.foldl (fn (n, tab) => G.Table.enter(tab, n, List.length (G.adj n)))
@@ -69,8 +64,13 @@ struct
           List.app (fn n => if (degree n) >= K then add_spill n else add_simplify n) nodes
         end
 
-      (* TODO: need to use this to simulate nodes which are 'removed' from graph *)
-      fun adjacent n =
+      fun adjacent n = 
+        let
+          val origAdjSet = G.adj n
+          val selectSet = set (Set.members !selectStack)
+        in
+          Set.listItems (Set.difference(origAdjSet, selectSet))
+        end
 
       (*fun nodeMoves () =
 
@@ -80,9 +80,9 @@ struct
         let
           val simplify_node = Set.minItem !simplifyWorklist
         in
-          (simplifyWorklist := Set.delete(!simplifyWorklist, simplify_node);
-           selectStack := Stack.push(!selectStack, simplify_node);
-           List.app decrementDegree (G.adj simplify_node))
+          simplifyWorklist := Set.delete(!simplifyWorklist, simplify_node);
+          selectStack := Stack.push(!selectStack, simplify_node);
+          List.app decrementDegree (adjacent simplify_node)
         end
 
       fun decrementDegree n =
@@ -100,16 +100,68 @@ struct
 
       fun conservative ns =
 
-      fun getAlias n =
+      (* meant for when we have coalescing -- for now returns same node *)
+      fun get_alias n = n
 
       fun combine (u, v) =
 
-      fun selectSpill () =
+      (* note: we check that the worklist is not empty before calling this function *)
+      fun spill () =
+        let
+          val spill_node = Set.minItem !spillWorklist
+        in
+          spillWorklist := Set.delete(!spillWorklist, spill_node);
+          simplifyWorklist := Set.add(!simplifyWorklist, spill_node)
+        end
 
-      fun assignColors () =
+      fun assign_colors () =
+        case Set.isEmpty !selectStack of
+          true => ()
+        | false => 
+            let
+              val (new_stack, popped_node) = Set.pop(!selectStack)
+              val okColors = ref (set List.tabulate(K, (fn x => x)))
+
+              fun check_existing_colors w =
+                let
+                  val all_colored = Set.union(!coloredNodes, !precolored) 
+                  val orig_w = get_alias w
+                in
+                  if Set.exists (fn x => G.eq(x, orig_w)) all_colored
+                  then okColors := Set.delete(!okColors, unwrap(tab, orig_w))
+                  else ()
+                end
+            in
+              selectStack := new_stack;
+              case Set.isEmpty !okColors of
+                true => spilledNodes := Set.add(!spilledNodes, popped_node)
+              | false => coloredNodes := Set.add(!coloredNodes, popped_node);
+                         nodeColor := G.Table.enter(!nodeColor, 
+                                                    popped_node, 
+                                                    Set.minItem !okColors);
+            end
 
       fun rewriteProgram () =
+
+      fun main_loop () =
+        if (Set.isEmpty !simplifyWorklist) andalso (Set.isEmpty !spillWorklist)
+        then assign_colors()
+        else
+          (case Set.isEmpty !simplifyWorklist of
+            true => ()
+          | false => simplify());
+          (case Set.isEmpty !spillWorklist of
+            true => ()
+          | false => spill());
+          main_loop()
     in
-      body
+      makeWorklist();
+      main_loop();
+      if not (Set.isEmpty !spilledNodes)
+      then rewrite_program !spilledNodes; color({interference=interference,
+                                                 initial=initial,
+                                                 spillCost=spillCost,
+                                                 registers=registers})
+      else ()
     end
 end
