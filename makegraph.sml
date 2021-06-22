@@ -8,6 +8,7 @@ struct
   structure A = Assem
   datatype temp_node = TEMPNODE of {node: Graph.node, instruct: Assem.instr}
 
+  (* TODO: nodes fall to next one if no jump? *)
   (* constructs a control-flow graph from a sequence of instructions *)
   fun instrs2graph instructs =
     let
