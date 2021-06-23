@@ -16,7 +16,8 @@ struct
       fun compare(a, b) = String.compare(a, b)
     end)
 
-  exception emptySet
+  exception EmptySet
+  exception ElementNotFound
 
   fun set l = GSet.addList(GSet.empty, l)
 
@@ -24,22 +25,24 @@ struct
   fun unwrap (tab: 'a Graph.Table.table, e: G.node) =
     case Graph.Table.look(tab, e) of
       SOME(s) => s
+    | NONE => raise ElementNotFound
 
   (* wrapper to retrieve an item from a set *)
   fun get_any s =
     case GSet.listItems s of
-      [] => raise emptySet
+      [] => raise EmptySet
     | x::xs => x
 
   type allocation = F.register Temp.Table.table
 
   fun color {interference, initial, spillCost, registers} =
     let
-      val K = List.length registers (* TODO: map K integers to colors for easier interfacing? *)
+      val K = List.length registers 
       val Liveness.IGRAPH({graph, tnode, gtemp, moves}) = interference
 
       (* Node work-lists, sets, and stacks *)
-      val precolored = ref GSet.empty
+      val nodes = G.nodes graph
+      val precolored = ref GSet.empty (* TODO: need to adapt from initial *)
       val simplifyWorklist = ref GSet.empty
       val spillWorklist = ref GSet.empty
       val spilledNodes = ref GSet.empty
@@ -48,15 +51,19 @@ struct
 
       (* Graph/auxilliary data structures *)
       (* TODO: remodel some of these data structures as functions instead *)
-      (*val adjGSet: (G.node * G.node) list = ref [] (* TODO: better as set? *)
-      val adjList: GSet.set G.Table.table = ref G.Table.empty*)
-      (*val moveList: Assem.instr G.Table.table = ref G.Table.empty*)
       val nodeColor: (F.register G.Table.table) ref = ref G.Table.empty
       val nodeDegree: (int G.Table.table) ref = ref G.Table.empty
 
-      (*fun build () = *)
-      
-      (*fun addEdge (u, v) =*)
+      fun init_precolored node = 
+        let
+          val temp = gtemp node
+        in
+          case Temp.Table.look(initial, temp) of
+            SOME(r) => 
+              (precolored := GSet.add(!precolored, node);
+              nodeColor := G.Table.enter(!nodeColor, node, r))
+          | NONE => ()
+        end
 
       fun degree n =
         case G.Table.look(!nodeDegree, n) of
@@ -81,10 +88,6 @@ struct
           GSet.listItems (GSet.difference(origAdjGSet, selectGSet))
         end
 
-      (*fun nodeMoves () =
-
-      fun moveRelated () =*)
-
       (* meant for when we have coalescing -- for now returns same node *)
       fun get_alias n = n
 
@@ -104,18 +107,6 @@ struct
           List.app decrementDegree (adjacent simplify_node)
         end
 
-      (*
-      fun enableMoves ns =
-
-      fun addWorklist wl =
-
-      fun ok (n1, n2) =
-
-      fun conservative ns =
-
-      fun combine (u, v) =*)
-
-
       (* note: we check that the worklist is not empty before calling this function *)
       fun spill () =
         let
@@ -131,7 +122,9 @@ struct
         | false => 
             let
               val (new_stack, popped_node) = Stack.pop(!selectStack)
-              val okColors = ref (RSet.fromList (List.tabulate(K, (fn x => Int.toString(x)))))
+              (* TODO: change to register names? *)
+              val okColors = ref (RSet.fromList registers)
+              val neighbors = G.adj popped_node
 
               fun check_existing_colors w =
                 let
@@ -143,13 +136,18 @@ struct
                   else ()
                 end
             in
+              print "assigning colors\n";
               selectStack := new_stack;
+              List.app check_existing_colors neighbors;
+              print (Int.toString(List.length (RSet.listItems (!okColors))) ^ "\n");
               case RSet.isEmpty (!okColors) of
                 true => spilledNodes := GSet.add(!spilledNodes, popped_node)
               | false => coloredNodes := GSet.add(!coloredNodes, popped_node);
+                         print "can color\n";
                          nodeColor := G.Table.enter(!nodeColor, 
                                                     popped_node, 
-                                                    hd (RSet.listItems (!okColors)))
+                                                    hd (RSet.listItems (!okColors)));
+                         assign_colors()
             end
 
       fun main_loop () =
@@ -168,6 +166,7 @@ struct
       nodeDegree := List.foldl (fn (n, tab) => G.Table.enter(tab, n, List.length (G.adj n)))
                  (!nodeDegree)
                  (G.nodes graph);
+      List.app init_precolored nodes;
       makeWorklist();
       main_loop();
       let
