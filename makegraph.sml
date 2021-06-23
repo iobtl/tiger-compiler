@@ -6,64 +6,63 @@ end =
 
 struct
   structure A = Assem
-  datatype temp_node = TEMPNODE of {node: Graph.node, instruct: Assem.instr}
+  structure G = Graph
 
-  (* TODO: nodes fall to next one if no jump? *)
   (* constructs a control-flow graph from a sequence of instructions *)
   fun instrs2graph instructs =
     let
-      val g = Graph.newGraph()
+      val g = G.newGraph()
 
-      (* create headers for jump targets first so when creating edges to the
-      same node we don't create a new node in the graph *)
-      fun make_jump_targets (n, tab) =
-        case n of
-          A.LABEL({assem, lab}) => Symbol.enter(tab, lab, Graph.newNode(g))
-        | _ => tab
+      val instr_nodes = List.map (fn i => (i, G.newNode(g))) instructs
 
-      val jump_targets = List.foldl make_jump_targets Symbol.empty instructs
+      fun link_nodes_jump (instr, node) =
+        let
+          fun check_jump target =
+            case List.find (fn (i, n) => case i of
+                                          A.LABEL({lab, ...}) => lab = target
+                                        | _ => false) instr_nodes
+              of SOME((_, jump_node)) => G.mk_edge({from=node, to=jump_node})
+        in
+          case instr of
+            A.OPER({jump=SOME(js), ...}) => List.app check_jump js
+          | _ => ()
+        end
 
-      fun parse_instruct (A.OPER({assem, dst, src, jump}), 
+      fun link_nodes_fall [] = ()
+        | link_nodes_fall [(i, n)] = ()
+        | link_nodes_fall ((i1, n1)::(i2, n2)::ns) =
+          (case i1 of
+            A.OPER({jump=SOME(j), ...}) => ()
+          | _ => G.mk_edge({from=n1, to=n2}); 
+          link_nodes_fall ns)
+
+      fun parse_instruct ((A.OPER({dst, src, ...}), node), 
                           {control, def, use, ismove}) =
-          let
-            val node = Graph.newNode(control)
-          in
-            (* reference previous nodes created for jump targets *)
-            (case jump of
-              NONE => ()
-            | SOME(labs) => 
-                List.app (fn lab => 
-                          let val SOME(tar) = Symbol.look(jump_targets, lab)
-                          in Graph.mk_edge({from=node, to=tar})
-                          end)
-                          labs);
-            {control=control,
-             def=Graph.Table.enter(def, node, dst),
-             use=Graph.Table.enter(use, node, src),
-             ismove=Graph.Table.enter(ismove, node, false)}
-          end
+          {control=control,
+           def=G.Table.enter(def, node, dst),
+           use=G.Table.enter(use, node, src),
+           ismove=G.Table.enter(ismove, node, false)}
 
-        | parse_instruct (A.LABEL({assem, lab}), {control, def, use, ismove}) =
+        | parse_instruct ((A.MOVE({dst, src, ...}), node),
+                          {control, def, use, ismove}) =
+          {control=control,
+           def=G.Table.enter(def, node, [dst]),
+           use=G.Table.enter(use, node, [src]),
+           ismove=G.Table.enter(ismove, node, true)}
+        
+        | parse_instruct ((A.LABEL(_), node),
+                          {control, def, use, ismove}) =
           {control=control, def=def, use=use, ismove=ismove}
 
-        | parse_instruct (A.MOVE({assem, dst, src}), {control, def, use, ismove}) =
-          let
-            val node = Graph.newNode(control)
-          in
-            {control=control,
-             def=Graph.Table.enter(def, node, [dst]),
-             use=Graph.Table.enter(use, node, [src]),
-             ismove=Graph.Table.enter(ismove, node, true)}
-          end
 
-      val def : Temp.temp list Graph.Table.table = Graph.Table.empty
-      val use : Temp.temp list Graph.Table.table = Graph.Table.empty
-      val ismove : bool Graph.Table.table = Graph.Table.empty
-      val flow = {control=g, def=def, use=use, ismove=ismove}
-      
-      val new_flow = List.foldl parse_instruct flow instructs
+      val def : Temp.temp list G.Table.table = G.Table.empty
+      val use : Temp.temp list G.Table.table = G.Table.empty
+      val ismove : bool G.Table.table = G.Table.empty
     in
-      (Flow.FGRAPH(new_flow), Graph.nodes (#control new_flow))
+      List.app link_nodes_jump instr_nodes;
+      link_nodes_fall instr_nodes;
+      (Flow.FGRAPH(List.foldl parse_instruct {control=g, def=def, use=use, ismove=ismove} instr_nodes),
+      Graph.nodes g)
     end
     
 end
