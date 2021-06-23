@@ -33,28 +33,26 @@ struct
 
   type allocation = F.register Temp.Table.table
 
-  (* Node work-lists, sets, and stacks *)
-  val precolored = ref GSet.empty
-  val initial = ref GSet.empty
-  val simplifyWorklist = ref GSet.empty
-  val spillWorklist = ref GSet.empty
-  val spilledNodes = ref GSet.empty
-  val coloredNodes = ref GSet.empty
-  val selectStack: G.node Stack.stack ref = ref (Stack.new())
-
-  (* Graph/auxilliary data structures *)
-  (* TODO: remodel some of these data structures as functions instead *)
-  (*val adjGSet: (G.node * G.node) list = ref [] (* TODO: better as set? *)
-  val adjList: GSet.set G.Table.table = ref G.Table.empty*)
-  (*val moveList: Assem.instr G.Table.table = ref G.Table.empty*)
-  val nodeColor: (F.register G.Table.table) ref = ref G.Table.empty
-  val nodeDegree: (int G.Table.table) ref = ref G.Table.empty
-
   fun color {interference, initial, spillCost, registers} =
     let
       val K = List.length registers (* TODO: map K integers to colors for easier interfacing? *)
       val Liveness.IGRAPH({graph, tnode, gtemp, moves}) = interference
 
+      (* Node work-lists, sets, and stacks *)
+      val precolored = ref GSet.empty
+      val simplifyWorklist = ref GSet.empty
+      val spillWorklist = ref GSet.empty
+      val spilledNodes = ref GSet.empty
+      val coloredNodes = ref GSet.empty
+      val selectStack: G.node Stack.stack ref = ref (Stack.new())
+
+      (* Graph/auxilliary data structures *)
+      (* TODO: remodel some of these data structures as functions instead *)
+      (*val adjGSet: (G.node * G.node) list = ref [] (* TODO: better as set? *)
+      val adjList: GSet.set G.Table.table = ref G.Table.empty*)
+      (*val moveList: Assem.instr G.Table.table = ref G.Table.empty*)
+      val nodeColor: (F.register G.Table.table) ref = ref G.Table.empty
+      val nodeDegree: (int G.Table.table) ref = ref G.Table.empty
 
       (*fun build () = *)
       
@@ -133,7 +131,7 @@ struct
         | false => 
             let
               val (new_stack, popped_node) = Stack.pop(!selectStack)
-              val okColors = ref (RSet.fromList (List.tabulate(K, (fn x => "x"))))
+              val okColors = ref (RSet.fromList (List.tabulate(K, (fn x => Int.toString(x)))))
 
               fun check_existing_colors w =
                 let
@@ -154,9 +152,6 @@ struct
                                                     hd (RSet.listItems (!okColors)))
             end
 
-      (* TODO: spilling *)
-      fun rewrite_program spills = spills
-
       fun main_loop () =
         if (GSet.isEmpty (!simplifyWorklist)) andalso (GSet.isEmpty (!spillWorklist))
         then assign_colors()
@@ -173,25 +168,18 @@ struct
       nodeDegree := List.foldl (fn (n, tab) => G.Table.enter(tab, n, List.length (G.adj n)))
                  (!nodeDegree)
                  (G.nodes graph);
-
       makeWorklist();
       main_loop();
-      if not (GSet.isEmpty (!spilledNodes))
-      then (rewrite_program (!spilledNodes); color({interference=interference,
-                                                 initial=initial,
-                                                 spillCost=spillCost,
-                                                 registers=registers}))
-      else
-        let
-          val temp_color =
-            List.foldl (fn (n, tab) => 
-                          Temp.Table.enter(tab, gtemp n, unwrap(!nodeColor, n)))
-                        Temp.Table.empty
-                        (G.nodes graph)
+      let
+        val temp_color =
+          List.foldl (fn (n, tab) => 
+                        Temp.Table.enter(tab, gtemp n, unwrap(!nodeColor, n)))
+                      Temp.Table.empty
+                      (G.nodes graph)
 
-          val spills = List.map gtemp (GSet.listItems (!spilledNodes))
-        in
-          (temp_color, spills)
-        end
+        val spills = List.map gtemp (GSet.listItems (!spilledNodes))
+      in
+        (temp_color, spills)
+      end
     end
 end
