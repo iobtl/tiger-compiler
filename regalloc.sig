@@ -1,9 +1,9 @@
 signature REG_ALLOC =
 sig	
-  structure MipsFrame : FRAME
+  structure F : FRAME
 
-  type allocation = MipsFrame.register Temp.Table.table
+  type allocation = F.register Temp.Table.table
 
-  val alloc : Assem.instr list * MipsFrame.frame ->
+  val alloc : Assem.instr list * F.frame ->
                         Assem.instr list * allocation
 end

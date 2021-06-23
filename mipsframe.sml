@@ -71,12 +71,10 @@ struct
   val wordSize = 4
 
   val temp_mapping = 
-    [(GP, "$gp"),
-     (SP, "$sp"),
+    [(SP, "$sp"),
      (FP, "$fp"),
      (RA, "$ra"),
      (RV, "$rv"),
-     (ZERO, "$zero"),
      (at, "$at"),
      (v0, "$v0"),
      (v1, "$v1"),
@@ -105,6 +103,7 @@ struct
 
   val tempMap = List.foldl (fn ((reg, name), tab) => Temp.Table.enter(tab, reg, name)) 
                 Temp.Table.empty temp_mapping
+  val registers = List.foldl (fn ((reg, name), ls) => name::ls) [] temp_mapping
 
   fun newFrame {name, formals} =
     let

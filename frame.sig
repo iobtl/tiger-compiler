@@ -16,6 +16,7 @@ sig
   val argregs : Temp.temp list
   val wordSize : int
   val tempMap : register Temp.Table.table
+  val registers : register list
 
   val exp : access -> Tree.exp -> Tree.exp
   val externalCall : string * Tree.exp list -> Tree.exp

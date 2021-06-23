@@ -33,6 +33,7 @@ makegraph.sml
 flowgraph.sml
 liveness.sml
 liveness.sig
+regalloc.sml
 regalloc.sig
 color.sml
 color.sig
