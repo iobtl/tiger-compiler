@@ -5,7 +5,6 @@ struct
                                gtemp: (Graph.node -> Temp.temp),
                                moves: (Graph.node * Graph.node) list}
 
-
   structure Set = RedBlackSetFn(
     struct
       type ord_key = Temp.temp

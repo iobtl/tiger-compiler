@@ -143,7 +143,7 @@ struct
               case RSet.isEmpty (!okColors) of
                 true => spilledNodes := GSet.add(!spilledNodes, popped_node)
               | false => coloredNodes := GSet.add(!coloredNodes, popped_node);
-                         print "can color\n";
+                         print ("can color with: " ^ hd (RSet.listItems (!okColors)) ^ "\n");
                          nodeColor := G.Table.enter(!nodeColor, 
                                                     popped_node, 
                                                     hd (RSet.listItems (!okColors)));

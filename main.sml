@@ -2,9 +2,13 @@ structure Main =
 struct
   structure Tr = Translate
   structure F = MipsFrame
-  (*structure R = RegAlloc*)
 
   fun getsome (SOME x) = x
+
+  fun temp_reg_map alloc temp =
+    case Temp.Table.look(alloc, temp) of
+      SOME(reg) => reg
+    | NONE => Temp.makestring temp
 
   fun emitproc out (F.PROC{body,frame}) =
     let
@@ -14,11 +18,11 @@ struct
   (*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
       val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
       val instrs = List.concat(map (MipsGen.codegen frame) stms') 
-      val format0 = Assem.format(Temp.makestring) (* needs to reference F.tempMap after register alloc *)
-      val (fgraph, fgraphnodes) = MakeGraph.instrs2graph instrs
-      val (igraph, node_liveout_map) = Liveness.interferenceGraph fgraph
+      val (instrs', alloc) = RegAlloc.alloc(instrs, frame)
+
+      val format0 = Assem.format(temp_reg_map alloc) 
     in  
-      app (fn i => TextIO.output(out,format0 i)) instrs
+      app (fn i => TextIO.output(out,format0 i)) instrs'
 
     end
     | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))

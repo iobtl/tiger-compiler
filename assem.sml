@@ -34,6 +34,4 @@ structure Assem = struct
 	  | LABEL{assem,...} => assem
 	  | MOVE{assem,dst,src} => speak(assem,[dst],[src],nil)
      end
-
 end
-
