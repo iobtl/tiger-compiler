@@ -6,7 +6,7 @@ struct
   datatype access = InFrame of int
                   | InReg of Temp.temp
 
-  type frame = {formals: access list, instructs: int,
+  type frame = {formals: access list, instructs: T.stm list,
                 locals: int ref, name: Temp.label}
 
   datatype frag = PROC of {body: Tree.stm, frame: frame}
@@ -105,17 +105,26 @@ struct
                 Temp.Table.empty temp_mapping
   val registers = List.foldl (fn ((reg, name), ls) => name::ls) [] temp_mapping
 
+  fun exp (InFrame(k)) addr = T.MEM(T.BINOP(T.PLUS, addr, T.CONST(k)))    
+    | exp (InReg(t)) _ = T.TEMP(t)
+
   fun newFrame {name, formals} =
     let
       val offset = ref 0
 
       (* static link and incoming arguments are written in 'previous frame' *)
-      fun get_access true = (offset := (!offset) + wordSize; InFrame((!offset)))
-        | get_access false = InReg(Temp.newtemp())
+      fun get_access esc = 
+        if esc
+        then 
+          (offset := (!offset) + wordSize;
+          InFrame((!offset)))
+        else InReg(Temp.newtemp())
+
+      fun view_shift (access, reg) = T.MOVE(exp access (T.TEMP(FP)), T.TEMP(reg))
 
       val formals_access = List.map get_access formals
     in
-      {formals=formals_access, instructs=0,
+      {formals=formals_access, instructs=ListPair.map view_shift (formals_access, argregs),
        locals=(ref 0), name=name}
     end
 
@@ -131,21 +140,45 @@ struct
       | false => InReg(Temp.newtemp())
     end
 
-  fun exp (InFrame(k)) addr = T.MEM(T.BINOP(T.PLUS, addr, T.CONST(k)))    
-    | exp (InReg(t)) _ = T.TEMP(t)
-
   fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel(s)), args)
 
   fun string (label, str) =
     (Symbol.name label) ^  ": .asciiz \"" ^ str ^ "\"\n"
 
+  fun seq [] = T.EXP(T.CONST(0))
+    | seq [stm] = stm
+    | seq (stm::stms') = T.SEQ(stm, seq stms')
+
   (* view shift *)
-  fun procEntryExit1 (frame, body) = body
+  fun procEntryExit1 (frame, body) = 
+    let
+      val {instructs=args, ...} = frame
+      val pairs = List.map (fn reg => (allocLocal frame false, reg)) (RA::calleesaves)
+      val save_instr = List.map (fn (access, reg) => T.MOVE(exp access (T.TEMP(FP)), T.TEMP(reg))) pairs
+      val restore_instr = List.map (fn (access, reg) => T.MOVE(T.TEMP(reg), exp access (T.TEMP(FP)))) (List.rev pairs)
+    in
+      seq(args@save_instr@[body]@restore_instr)
+    end
+
   fun procEntryExit2 (frame, body) =
     body @
     [A.OPER({assem="",
              src=[ZERO, RA, SP]@calleesaves,
              dst=[],
              jump=SOME([])})]
+
+  fun procEntryExit3 ({name, formals, locals, instructs}, body) =
+    let
+      val offset = ((!locals) + (List.length argregs)) * wordSize
+    in
+      {prolog=(Symbol.name name) ^ ":\n" ^
+              "\tsw\t$fp\t0($sp)\n" ^
+              "\tmove\t$fp\t$sp\n" ^
+              "\taddiu\t$sp\t$sp\t-" ^ Int.toString(offset) ^ "\n",
+       body=body,
+       epilog="\tmove\t$sp\t$fp\n" ^
+              "\tlw\t$fp\t0($sp)\n" ^
+              "\tjr\t$ra\n\n"}
+    end
 end

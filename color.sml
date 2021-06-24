@@ -122,7 +122,6 @@ struct
         | false => 
             let
               val (new_stack, popped_node) = Stack.pop(!selectStack)
-              (* TODO: change to register names? *)
               val okColors = ref (RSet.fromList registers)
               val neighbors = G.adj popped_node
 
@@ -130,9 +129,13 @@ struct
                 let
                   val all_colored = GSet.union(!coloredNodes, !precolored) 
                   val orig_w = get_alias w
+                  val orig_w_color = unwrap(!nodeColor, orig_w)
                 in
+                  print ("neighbor w color: " ^ unwrap(!nodeColor, orig_w) ^ "\n");
+                  (* may have two non-interfering neighbors with same color *)
                   if GSet.exists (fn x => G.eq(x, orig_w)) all_colored
-                  then okColors := RSet.delete(!okColors, unwrap(!nodeColor, orig_w))
+                     andalso RSet.member(!okColors, orig_w_color) 
+                  then okColors := RSet.delete(!okColors, orig_w_color)
                   else ()
                 end
             in

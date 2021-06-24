@@ -18,12 +18,15 @@ struct
   (*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
       val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
       val instrs = List.concat(map (MipsGen.codegen frame) stms') 
-      val (instrs', alloc) = RegAlloc.alloc(instrs, frame)
+      val instrs' = F.procEntryExit2(frame, instrs)
+      val (instrs'', alloc) = RegAlloc.alloc(instrs, frame)
+      val {prolog, body, epilog} = F.procEntryExit3(frame, instrs'')
 
       val format0 = Assem.format(temp_reg_map alloc) 
     in  
-      app (fn i => TextIO.output(out,format0 i)) instrs'
-
+      TextIO.output(out, prolog);
+      app (fn i => TextIO.output(out,format0 i)) instrs'';
+      TextIO.output(out, epilog)
     end
     | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))
   
